@@ -1,0 +1,605 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl"><head><meta charset="utf-8"><title>PESS V27</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#002244"><meta name="mobile-web-app-capable" content="yes">
+<link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&display=swap" rel="stylesheet">
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcode-generator/1.4.4/qrcode.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.9/babel.min.js"></script>
+<style>
+:root{--bg:#f1f5f9;--card:#fff;--tx:#0f172a;--mut:#64748b;--bd:#e2e8f0;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media(prefers-color-scheme:dark){:root:not([data-theme=light]){--bg:#0b1220;--card:#162033;--tx:#e5e7eb;--mut:#94a3b8;--bd:#2a3750}}
+html,body{height:100%;margin:0}body{font-family:Cairo,'Noto Sans Arabic','Noto Naskh Arabic',Tahoma,'Segoe UI',sans-serif;font-size:16px;line-height:1.6;letter-spacing:0;word-spacing:0;text-rendering:optimizeLegibility;-webkit-font-smoothing:antialiased;-webkit-text-size-adjust:100%;background:var(--bg);color:var(--tx);-webkit-tap-highlight-color:transparent;overscroll-behavior:none}
+button,input,select,textarea,a{font-family:inherit;letter-spacing:0}.text-xs{font-size:13px!important}.text-sm{font-size:15px!important}b,.font-bold{font-weight:700}input,select{unicode-bidi:plaintext}
+@page{size:A4;margin:12mm}
+@media print{#root>div>*:not(.sheet){display:none!important}.sheet{position:static!important;background:#fff!important;display:block!important}.sheet>div{max-height:none!important;overflow:visible!important;padding:0!important;border-radius:0!important}.noprint{display:none!important}}
+.card{background:var(--card);border-radius:16px;box-shadow:0 1px 3px #0002}.inp{width:100%;min-height:44px;border:1px solid var(--bd);background:var(--card);color:var(--tx);border-radius:10px;padding:6px 10px;font:inherit}
+.btn{min-height:44px;border-radius:12px;padding:0 16px;font-weight:700;color:#fff;background:#002244}.mono{font-family:inherit;font-variant-numeric:tabular-nums;letter-spacing:0}
+.sheet{position:fixed;inset:0;z-index:50;background:#0007;display:flex;align-items:flex-end}.sheet>div{background:var(--bg);width:100%;max-height:92%;overflow:auto;border-radius:20px 20px 0 0;padding:14px;padding-bottom:calc(14px + env(safe-area-inset-bottom,0px))}
+.nav{position:fixed;bottom:0;inset-inline:0;background:var(--card);border-top:1px solid var(--bd);display:flex;padding-bottom:env(safe-area-inset-bottom,0px);z-index:20}
+.nav button{flex:1;min-height:66px;font-size:12px;color:var(--mut);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px}.nav .pill{width:60px;height:30px;border-radius:15px;display:flex;align-items:center;justify-content:center;transition:background .2s}.nav button.on{color:#0f7a3a;font-weight:700}.nav button.on .pill{background:rgba(15,122,58,.18)}
+</style></head><body><div id="root"></div>
+<script>const ORIG=null;const COSTS={};</script>
+<script type="text/babel">
+const {useState,useRef,useEffect,useMemo}=React;
+const K='pess_v27_android',KB=K+'_bak';
+const METHODS=['نقداً','كاش','ون كاش','جيب','جوالي','الكريمي','حوالة','شيك','تقدير','فلوسك','أم فلوس','أخرى'];
+const TYPES=['منتهي تقسيط','تقسيط','نقد','رشيد'];
+const RES=['وعد بالسداد','لم يرد','طلب مهلة','سيسدد قريباً','رفض','أخرى'];
+const PHL=['رئيسي','واتساب','عمل','منزل','أخرى'];
+const DEF={types:[...TYPES],methods:[...METHODS],res:[...RES],phl:[...PHL]};
+const FT={text:'نص',number:'رقم',date:'تاريخ',select:'قائمة'};
+const applyLists=d=>{const L=d.lists||{};[[TYPES,'types'],[METHODS,'methods'],[RES,'res'],[PHL,'phl']].forEach(([a,k])=>{const n=L[k]||DEF[k];a.length=0;a.push(...n)})};
+const num=v=>{if(v==null)return 0;const s=String(v).replace(/[٠-٩]/g,d=>d.charCodeAt(0)-1632).replace(/[۰-۹]/g,d=>d.charCodeAt(0)-1776).replace(/[,٬،\s]/g,'');const n=parseFloat(s);return isFinite(n)?n:0};
+const r2=n=>Math.round(n*100)/100,fmt=n=>Math.round(n).toLocaleString('en-US'),pad2=n=>String(n).padStart(2,'0'),ld=d=>d.getFullYear()+'-'+pad2(d.getMonth()+1)+'-'+pad2(d.getDate()),today=()=>ld(new Date());
+const nid=a=>(a||[]).reduce((m,x)=>Math.max(m,+x.id||0),0)+1;
+const fromOrig=o=>({clients:(o.customers||[]).map((c,i)=>({id:i+1,name:c['العميل'],x:c['حقول']||{},phones:((o.phones||{})[c['العميل']]||[]).map(p=>({n:p.number,l:p.label})),credit:num((o.creditLimits||{})[c['العميل']]),calls:(o.callLogs||{})[c['العميل']]||[],
+ contracts:(c['العقود']||[]).map(k=>({id:k.id,x:k['حقول']||{},sub:k['العميل_الفرعي']||'',items:(k['المواد']||'').trim(),type:k['النوع']||'تقسيط',months:num(k['اشهر_التقسيط']),total:num(k['اجمالي_السعر']),down:num(k['المقدمة']),discount:num(k['خصم']),cost:num((o.costs||{})[k.id]),date:k['تاريخ_الإضافة']||'',note:k['ملاحظة']||'',payments:(k['الدفعات']||[]).map((p,j)=>({id:j+1,x:p['حقول']||{},amount:num(p['قيمة']),date:p['تاريخ']||'',method:p['طريقة']||'نقداً',ref:p['مرجع']||'',note:p['ملاحظة']||''}))}))})),company:o.company||{},schema:o.schema||{c:[],k:[],p:[]},lists:o.lists||null,tables:o.tables||[],audit:[]});
+const toOrig=d=>{const o={customers:[],phones:{},company:d.company||{},callLogs:{},creditLimits:{},costs:{},schema:d.schema||{c:[],k:[],p:[]},lists:d.lists||null,tables:d.tables||[],date:new Date().toISOString()};d.clients.forEach(c=>{o.customers.push({'العميل':c.name,'حقول':c.x||{},'العقود':c.contracts.map(k=>{if(k.cost)o.costs[k.id]=k.cost;return{id:k.id,'حقول':k.x||{},'العميل_الفرعي':k.sub||'','المواد':k.items,'النوع':k.type,'اشهر_التقسيط':k.months,'اجمالي_السعر':k.total,'المقدمة':k.down,'خصم':k.discount,'ملاحظة':k.note||'','تاريخ_الإضافة':k.date||'','الدفعات':k.payments.map(p=>({'حقول':p.x||{},'قيمة':p.amount,'تاريخ':p.date,'ملاحظة':p.note,'طريقة':p.method,'مرجع':p.ref}))}})});
+ if(c.phones.length)o.phones[c.name]=c.phones.map(p=>({number:p.n,label:p.l}));if(c.calls.length)o.callLogs[c.name]=c.calls;if(c.credit)o.creditLimits[c.name]=c.credit});return o};
+const lsGet=k=>{try{const d=JSON.parse(localStorage.getItem(k));return d&&Array.isArray(d.clients)?d:null}catch(e){return null}};
+const migrate1=d=>{if(!d.m1){let n=0;d.clients.forEach(c=>c.contracts.forEach(k=>{if(!num(k.cost)&&COSTS[k.id]){k.cost=COSTS[k.id];n++}}));d.m1=1;if(n)d.audit=[{t:new Date().toISOString(),a:'دمج تكلفة '+n+' عقد من ملف الإكسل (لم تُستبدل التكاليف المدخلة)',k:'m1'}].concat(d.audit||[])}return d};
+const migrate2=d=>{if(d.m2)return d;const L={...DEF,...(d.lists||{})};const add=(k,v)=>{if(v&&!L[k].includes(v))L[k]=[...L[k],v]};
+ d.clients.forEach(c=>{(c.phones||[]).forEach(p=>add('phl',p.l));(c.calls||[]).forEach(x=>add('res',x.result));c.contracts.forEach(k=>{add('types',k.type);(k.payments||[]).forEach(p=>add('methods',p.method))})});d.lists=L;d.m2=1;return d};
+const migrate=d=>migrate2(migrate1(d));
+const load=()=>{const best=[lsGet(K),lsGet(KB)].filter(Boolean).sort((x,y)=>(y._t||0)-(x._t||0))[0];return migrate(best||fromOrig(ORIG||{}))};
+const idb=(m,v)=>new Promise(res=>{try{const r=indexedDB.open('pess',1);r.onupgradeneeded=()=>r.result.createObjectStore('s');r.onsuccess=()=>{try{const t=r.result.transaction('s',m==='get'?'readwrite':'readwrite').objectStore('s'),q=m==='get'?t.get('d'):t.put(v,'d');q.onsuccess=()=>res(q.result);q.onerror=()=>res(null)}catch(e){res(null)}};r.onerror=()=>res(null)}catch(e){res(null)}});
+const FL={sub:'العميل الفرعي',items:'المواد',type:'النوع',months:'الأشهر',total:'الإجمالي',down:'المقدمة',discount:'الخصم',cost:'التكلفة',date:'التاريخ',name:'الاسم',credit:'الحد الائتماني',amount:'مبلغ الدفعة',method:'طريقة الدفع',ref:'المرجع',note:'الملاحظة'};
+const cc=k=>{const ps=(k.payments||[]).filter(Boolean),paid=num(k.down)+ps.reduce((s,p)=>s+num(p.amount),0),rem=r2(num(k.total)-num(k.discount)-paid),profit=num(k.total)-num(k.cost)-num(k.discount);
+ const ld=ps.map(p=>p.date).concat(k.date).filter(Boolean).sort().pop(),days=ld?(Date.now()-new Date(ld))/864e5:0;
+ const st=rem<=0?'مسدد':!ps.length&&!num(k.down)?'بدون دفعات':days>=90?'متعثر':days>=30?'متأخر':'منتظم';
+ return{paid,rem,profit,st,pct:num(k.total)?paid/(num(k.total)-num(k.discount)||1)*100:0,rp:profit*Math.min(1,Math.max(0,paid/((num(k.total)-num(k.discount))||1)))}};
+const COL={'جديد':'#64748b','مسدد':'#0f7a3a','بدون دفعات':'#64748b','متعثر':'#b91c1c','متأخر':'#f59e0b','منتظم':'#2563eb'};
+const tot=c=>{let t=0,p=0,r=0,pr=0,co=0,rp=0;c.contracts.forEach(k=>{const x=cc(k);t+=num(k.total)-num(k.discount);p+=x.paid;r+=Math.max(x.rem,0);pr+=x.profit;rp+=x.rp;co+=num(k.cost)});return{t,p,r,pr,co,rp}};
+const cst=c=>{if(!c.contracts.length)return 'جديد';const s=c.contracts.map(k=>cc(k).st);return s.includes('متعثر')?'متعثر':s.includes('متأخر')?'متأخر':tot(c).r<=0?'مسدد':s.every(x=>x==='بدون دفعات')?'بدون دفعات':'منتظم'};
+const wa=(n,t)=>{let d=String(n||'').replace(/\D/g,'');if(d.length===9)d='967'+d;return 'https://wa.me/'+d+(t?'?text='+encodeURIComponent(t):'')};
+const stmt=(co,c)=>{const t=tot(c);return (co.name||'')+'\nكشف حساب: '+c.name+'\n'+c.contracts.map(k=>{const x=cc(k);return '• '+k.items+'\n  الصافي '+fmt(num(k.total)-num(k.discount))+' | مدفوع '+fmt(x.paid)+' | باقي '+fmt(Math.max(x.rem,0))}).join('\n')+'\nإجمالي المتبقي: '+fmt(t.r)};
+
+const esc=s=>String(s==null?'':s).replace(/[&<>"]/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[m]));
+const mg=(k,x)=>{const n=num(k.total)-num(k.discount);return n?x.profit/n*100:0};
+const STCSS='.stm{font-family:Cairo,Tahoma,sans-serif;background:#fff;color:#0f172a;padding:18px;direction:rtl;max-width:820px;margin:auto;line-height:1.6;font-size:14px}.stm *{box-sizing:border-box}.stm .h{display:flex;justify-content:space-between;align-items:center;border-bottom:4px solid #002244;padding-bottom:12px;gap:10px}.stm h2{margin:0;color:#002244;font-size:21px}.stm h3{margin:0;color:#002244;font-size:17px}.stm small{color:#64748b;font-size:12px;display:block}.stm .cb{display:grid;grid-template-columns:repeat(2,1fr);gap:6px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;padding:10px;margin:12px 0}.stm .cb b{display:block;font-size:14px}.stm .ks{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin:12px 0}.stm .k{background:#f1f5f9;border-radius:10px;padding:8px;text-align:center}.stm .k b{display:block;font-size:17px}.stm .gh{display:flex;justify-content:space-between;flex-wrap:wrap;gap:6px;background:#002244;color:#fff;border-radius:8px;padding:6px 10px;margin:14px 0 4px;font-size:13px}.stm .c{border:1px solid #e2e8f0;border-radius:10px;padding:10px;margin:8px 0;break-inside:avoid}.stm .ch{display:flex;justify-content:space-between;gap:8px;align-items:center}.stm .bd{color:#fff;border-radius:99px;padding:0 8px;font-size:11px}.stm .cs{display:flex;gap:12px;flex-wrap:wrap;font-size:13px;margin:6px 0}.stm table{width:100%;border-collapse:collapse;font-size:12px}.stm th{background:#334155;color:#fff;padding:4px}.stm td{border-bottom:1px solid #e2e8f0;padding:4px;text-align:center}.stm tr:nth-child(even) td{background:#f8fafc}.stm .tb{background:#002244;color:#fff;border-radius:10px;padding:12px;display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-top:14px;font-size:15px}.stm .ft{display:flex;justify-content:space-around;align-items:flex-end;margin-top:22px;text-align:center;gap:8px;break-inside:avoid}.stm .sg{min-width:110px}.stm .ln{border-top:1px solid #0f172a;margin:4px 8px}.stm .np{font-size:11px;color:#64748b;text-align:center;margin-top:12px}';
+function stmtBody(co,c,o){o=o||{};const ids=o.ids||c.contracts.map(k=>k.id);let sel=c.contracts.filter(k=>ids.includes(k.id));if(o.hidePaid)sel=sel.filter(k=>cc(k).rem>0);if(o.sk)sel=sortBy(sel,k=>ctKey(k,o.sk),o.sd||1);
+ const t=tot({contracts:sel}),dt=new Date().toLocaleDateString('ar-EG',{year:'numeric',month:'long',day:'numeric'}),ref='PESS-'+today().replace(/-/g,'')+'-'+c.id;
+ const im=(src,h)=>src?'<img src="'+src+'" style="height:'+h+'px;max-width:100%;object-fit:contain">':'';
+ const fl=(k,f)=>o[k]!==undefined?o[k]:!!co[f];
+ let qr='';if(fl('qr','qrEnabled')){try{const q=qrcode(0,'M');q.addData('PESS|'+ref+'|REM:'+Math.round(t.r)+(co.phone?'|T:'+String(co.phone).replace(/\D/g,''):''));q.make();qr=q.createSvgTag(3,0)}catch(e){}}
+ const kp=(l,v,col)=>'<div class="k" style="border-top:3px solid '+col+'"><small>'+l+'</small><b>'+v+'</b></div>';
+ const one=k=>{const x=cc(k),net=num(k.total)-num(k.discount);let cum=0;const rows=[];
+  if(num(k.down)>0){cum+=num(k.down);rows.push(['مقدمة',k.date,'—',num(k.down),cum])}
+  (k.payments||[]).forEach((p,i)=>{cum+=num(p.amount);rows.push([i+1,p.date,(p.method||'')+(p.ref?' · '+p.ref:''),num(p.amount),cum])});
+  return '<div class="c"><div class="ch"><b>'+esc(k.items||'عقد')+'</b><span><small style="display:inline">#'+k.id+' · '+esc(k.type)+(k.sub?' · '+esc(k.sub):'')+'</small> <span class="bd" style="background:'+COL[x.st]+'">'+x.st+'</span></span></div><div class="cs"><span>الصافي <b>'+fmt(net)+'</b></span><span>المدفوع <b>'+fmt(x.paid)+'</b></span><span>المتبقي <b style="color:#b91c1c">'+fmt(Math.max(x.rem,0))+'</b></span></div>'+
+  (o.det!==false?(rows.length?'<table><tr><th>#</th><th>التاريخ</th><th>الطريقة</th><th>المبلغ</th><th>التراكمي</th><th>الباقي</th></tr>'+rows.map(r=>'<tr><td>'+r[0]+'</td><td>'+esc(r[1]||'—')+'</td><td>'+esc(r[2])+'</td><td>'+fmt(r[3])+'</td><td>'+fmt(r[4])+'</td><td>'+fmt(Math.max(net-r[4],0))+'</td></tr>').join('')+'</table>':'<p class="np" style="text-align:right">لا توجد دفعات</p>'):'')+'</div>'};
+ const hasSub=sel.some(k=>k.sub);let body='';
+ if(o.group!==false&&hasSub){const g={};sel.forEach(k=>{const n=k.sub||'عقود العميل مباشرة';(g[n]=g[n]||[]).push(k)});
+  body=Object.entries(g).map(([n,ks])=>{const u=tot({contracts:ks});return '<div class="gh"><b>↳ '+esc(n)+' ('+ks.length+')</b><span>الصافي '+fmt(u.t)+' · المدفوع '+fmt(u.p)+' · المتبقي '+fmt(u.r)+'</span></div>'+ks.map(one).join('')}).join('')}
+ else body=sel.map(one).join('');
+ if(!sel.length)body='<p class="np">لم يتم اختيار أي عقد</p>';
+ const ph=(c.phones||[]).map(p=>p.n).filter(Boolean).join(' · ');
+ return '<div class="stm"><style>'+STCSS+'</style><div class="h"><div>'+(fl('logo','logoEnabled')&&co.logo?im(co.logo,60):'')+'</div><div style="text-align:left"><h2>'+esc(co.name||'كشف حساب')+'</h2><small>'+esc(co.addr||'')+'</small><small>'+esc(co.phone||'')+' '+esc(co.email||'')+'</small></div></div>'+
+ '<h3 style="margin-top:12px">كشف حساب عميل</h3><div class="cb"><div><small>العميل</small><b>'+esc(c.name)+'</b></div><div><small>الهاتف</small><b>'+esc(ph||'—')+'</b></div><div><small>رقم الكشف</small><b style="font-size:12px">'+ref+'</b></div><div><small>التاريخ</small><b>'+dt+'</b></div>'+(num(c.credit)>0?'<div><small>الحد الائتماني</small><b>'+fmt(c.credit)+'</b></div>':'')+'<div><small>العقود المشمولة</small><b>'+sel.length+' من '+c.contracts.length+'</b></div></div>'+
+ '<div class="ks">'+kp('إجمالي العقود',fmt(t.t),'#002244')+kp('المدفوع',fmt(t.p),'#0f7a3a')+kp('المتبقي',fmt(t.r),'#b91c1c')+kp('نسبة التحصيل',(t.t?t.p/t.t*100:0).toFixed(0)+'%','#f59e0b')+'</div>'+body+
+ '<div class="tb"><span>الصافي: <b>'+fmt(t.t)+'</b></span><span>المدفوع: <b>'+fmt(t.p)+'</b></span><span>المتبقي المستحق: <b>'+fmt(t.r)+'</b></span></div>'+
+ '<div class="ft"><div class="sg">'+(fl('sign','signEnabled')&&co.sign?im(co.sign,60):'<div style="height:50px"></div>')+'<div class="ln"></div><small>توقيع المحاسب</small></div>'+(fl('stamp','stampEnabled')&&co.stamp?'<div class="sg">'+im(co.stamp,80)+'<small>الختم</small></div>':'')+'<div class="sg"><div style="height:50px"></div><div class="ln"></div><small>توقيع المستلم</small></div>'+(qr?'<div>'+qr+'</div>':'')+'</div>'+
+ (o.note?'<p class="np" style="font-size:12px;color:#0f172a">'+esc(o.note)+'</p>':'')+(co.note?'<p class="np">'+esc(co.note)+'</p>':'')+'<p class="np">'+esc(co.name||'')+' — كشف صادر آلياً من نظام PESS بتاريخ '+dt+'</p></div>'}
+const PERIODS=[['today','اليوم'],['yday','أمس'],['w7','آخر 7 أيام'],['m','هذا الشهر'],['pm','الشهر الماضي'],['y','هذه السنة'],['c','فترة مخصصة'],['all','الكل'],['nd','بدون تاريخ']];
+function periodRange(k,cf,ct){const n=new Date(),y=n.getFullYear(),m=n.getMonth(),d=n.getDate(),D=(a,b,c)=>ld(new Date(a,b,c));
+ if(k==='today')return[D(y,m,d),D(y,m,d)];if(k==='yday')return[D(y,m,d-1),D(y,m,d-1)];if(k==='w7')return[D(y,m,d-6),D(y,m,d)];
+ if(k==='m')return[D(y,m,1),D(y,m+1,0)];if(k==='pm')return[D(y,m-1,1),D(y,m,0)];if(k==='y')return[D(y,0,1),D(y,11,31)];
+ if(k==='c')return[cf||'0000-00-00',ct||'9999-99-99'];return['0000-00-00','9999-99-99']}
+function prevRange(k,a,b){const n=new Date(),y=n.getFullYear(),m=n.getMonth(),D=(x,z,w)=>ld(new Date(x,z,w));
+ if(k==='m')return[D(y,m-1,1),D(y,m,0)];if(k==='pm')return[D(y,m-2,1),D(y,m-1,0)];if(k==='y')return[D(y-1,0,1),D(y-1,11,31)];
+ const A=new Date(a+'T00:00'),B=new Date(b+'T00:00'),len=Math.round((B-A)/864e5)+1,e=new Date(A);e.setDate(e.getDate()-1);const t=new Date(e);t.setDate(t.getDate()-len+1);return[ld(t),ld(e)]}
+const monthName=d=>new Date(d+'T00:00').toLocaleDateString('ar',{month:'long',year:'numeric'});
+const useUi=(k,d)=>{const [v,setV]=useState(()=>{try{const x=localStorage.getItem('pess_ui_'+k);return x?JSON.parse(x):d}catch(e){return d}});const set=x=>{setV(x);try{localStorage.setItem('pess_ui_'+k,JSON.stringify(x))}catch(e){}};return [v,set]};
+const sortBy=(arr,get,dir)=>[...arr].sort((a,b)=>{const x=get(a),y=get(b);const r=(typeof x==='string'||typeof y==='string')?String(x==null?'':x).localeCompare(String(y==null?'':y),'ar'):(x||0)-(y||0);return r*(dir||1)});
+const ctKey=(k,s)=>s==='rem'?cc(k).rem:s==='sub'?(k.sub||''):s==='items'?(k.items||''):k.id;
+const SEV={'متعثر':4,'متأخر':3,'منتظم':2,'بدون دفعات':1,'مسدد':0,'جديد':-1};
+const lastPay=c=>c.contracts.flatMap(k=>(k.payments||[]).map(p=>p.date||'')).sort().pop()||'';
+const dlBlob=(name,blob)=>{const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=name;a.click()};
+function xl(name,sheets){
+ if(typeof XLSX==='undefined'){const rows=[];sheets.forEach(s=>{rows.push([s.n]);rows.push(s.h);s.r.forEach(r=>rows.push(r));rows.push([])});dlBlob(name.replace(/\.xlsx$/,'.csv'),new Blob(['\uFEFFsep=,\n'+rows.map(r=>r.map(v=>'"'+String(v==null?'':v).replace(/"/g,'""')+'"').join(',')).join('\n')],{type:'text/csv'}));return 'csv'}
+ const wb=XLSX.utils.book_new();
+ sheets.forEach(s=>{const nr=s.r.length,aoa=[s.h].concat(s.r);if(s.tot)aoa.push(s.h.map((_,i)=>i===0?'الإجمالي':''));
+  const ws=XLSX.utils.aoa_to_sheet(aoa);
+  if(s.tot)s.tot.forEach(i=>{const col=XLSX.utils.encode_col(i);ws[col+(nr+2)]={t:'n',v:s.r.reduce((a,r)=>a+(+r[i]||0),0),f:'SUM('+col+'2:'+col+(nr+1)+')',z:'#,##0.##'}});
+  const g=XLSX.utils.decode_range(ws['!ref']);for(let R=1;R<=g.e.r;R++)for(let C=0;C<=g.e.c;C++){const c=ws[XLSX.utils.encode_cell({r:R,c:C})];if(c&&c.t==='n'&&!c.z)c.z=(s.pct||[]).includes(C)?'0.0%':'#,##0.##'}
+  ws['!cols']=(s.w||s.h.map(()=>18)).map(w=>({wch:w}));ws['!autofilter']={ref:XLSX.utils.encode_range({s:{r:0,c:0},e:{r:Math.max(nr,1),c:s.h.length-1}})};
+  XLSX.utils.book_append_sheet(wb,ws,String(s.n).slice(0,31))});
+ wb.Workbook={Views:[{RTL:true}]};XLSX.writeFile(wb,name);return 'xlsx'}
+function profitSheets(cls){
+ const rows=cls.map(c=>{const t=tot(c);return[c.name,c.contracts.length,t.t,t.co,t.pr,t.t?t.pr/t.t:0,t.p,t.t?t.p/t.t:0,t.r,t.rp,t.pr-t.rp]});
+ const ct=[];cls.forEach(c=>c.contracts.forEach(k=>{const x=cc(k),net=num(k.total)-num(k.discount);ct.push([c.name,k.sub||'',k.id,k.items,k.type,k.date||'',net,num(k.cost),x.profit,net?x.profit/net:0,x.paid,x.rem>0?x.rem:0,x.rp,x.st])}));
+ const T=cls.reduce((a,c)=>{const t=tot(c);return{n:a.n+c.contracts.length,t:a.t+t.t,co:a.co+t.co,pr:a.pr+t.pr,p:a.p+t.p,r:a.r+t.r,rp:a.rp+t.rp}},{n:0,t:0,co:0,pr:0,p:0,r:0,rp:0});
+ const ty=TYPES.map(y=>{const a=ct.filter(r=>r[4]===y);const n=a.reduce((s,r)=>s+r[6],0),p=a.reduce((s,r)=>s+r[8],0);return[y,a.length,n,a.reduce((s,r)=>s+r[7],0),p,n?p/n:0]}).filter(r=>r[1]);
+ return[{n:'ملخص',h:['المؤشر','القيمة'],r:[['عدد العملاء',cls.length],['عدد العقود',T.n],['صافي المبيعات',T.t],['التكلفة',T.co],['إجمالي الربح',T.pr],['الربح المحصّل',T.rp],['الربح غير المحصّل',T.pr-T.rp],['المحصّل من المبيعات',T.p],['المتبقي',T.r],['تاريخ التقرير',today()]],w:[26,20]},
+ {n:'ربح العملاء',h:['العميل','عدد العقود','صافي المبيعات','التكلفة','الربح','الهامش','المحصّل','نسبة التحصيل','المتبقي','ربح محصّل','ربح غير محصّل'],r:rows,tot:[1,2,3,4,6,8,9,10],pct:[5,7],w:[28,10,15,14,14,9,14,11,14,14,14]},
+ {n:'العقود',h:['العميل','العميل الفرعي','رقم العقد','المواد','النوع','التاريخ','الصافي','التكلفة','الربح','الهامش','المدفوع','المتبقي','ربح محصّل','الحالة'],r:ct,tot:[6,7,8,10,11,12],pct:[9],w:[24,18,9,28,12,12,13,13,13,9,13,13,13,12]},
+ {n:'حسب النوع',h:['النوع','عدد العقود','الصافي','التكلفة','الربح','الهامش'],r:ty,tot:[1,2,3,4],pct:[5],w:[16,10,15,14,14,9]}]}
+function paySheets(rows,label,sum,dlt){const n=rows.length,bm={},bc={},bd={};
+ rows.forEach(r=>{const a=num(r.p.amount),m=r.p.method||'—',cn=r.c.name;(bm[m]=bm[m]||[0,0]);bm[m][0]++;bm[m][1]+=a;(bc[cn]=bc[cn]||[0,0]);bc[cn][0]++;bc[cn][1]+=a;if(r.d){(bd[r.d]=bd[r.d]||[0,0]);bd[r.d][0]++;bd[r.d][1]+=a}});
+ const E=o=>Object.entries(o).sort((a,b)=>b[1][1]-a[1][1]);
+ return[{n:'ملخص',h:['البند','القيمة'],r:[['الفترة',label],['إجمالي الدفعات',sum],['عدد الدفعات',n],['متوسط الدفعة',n?sum/n:0],['التغيّر عن الفترة السابقة',dlt==null?'—':(dlt>=0?'▲ ':'▼ ')+Math.abs(dlt).toFixed(0)+'%'],['تاريخ التقرير',today()]],w:[26,24]},
+ {n:'الدفعات',h:['التاريخ','العميل','العقد','المواد','العميل الفرعي','المبلغ','الطريقة','المرجع','ملاحظة'],r:rows.map(r=>[r.d||'',r.c.name,r.k.id,r.k.items,r.k.sub||'',num(r.p.amount),r.p.method||'',r.p.ref||'',r.p.note||'']),tot:[5],w:[12,24,9,28,18,13,12,14,24]},
+ {n:'حسب الطريقة',h:['الطريقة','عدد الدفعات','المبلغ','النسبة'],r:E(bm).map(([m,v])=>[m,v[0],v[1],sum?v[1]/sum:0]),tot:[1,2],pct:[3],w:[16,12,16,10]},
+ {n:'حسب العميل',h:['العميل','عدد الدفعات','المبلغ'],r:E(bc).map(([m,v])=>[m,v[0],v[1]]),tot:[1,2],w:[28,12,16]},
+ {n:'حسب اليوم',h:['التاريخ','عدد الدفعات','المبلغ'],r:Object.entries(bd).sort().map(([m,v])=>[m,v[0],v[1]]),tot:[1,2],w:[14,12,16]}]}
+function fullSheets(cl){const cn=[],ct=[],py=[];
+ cl.forEach(c=>{const t=tot(c);cn.push([c.id,c.name,(c.phones||[]).map(p=>p.n).join(' / '),num(c.credit),c.contracts.length,t.t,t.p,t.r,t.pr,cst(c)]);
+  c.contracts.forEach(k=>{const x=cc(k),net=num(k.total)-num(k.discount);ct.push([k.id,c.name,k.sub||'',k.items,k.type,k.date||'',num(k.months),num(k.total),num(k.discount),net,num(k.cost),num(k.down),x.paid,x.rem>0?x.rem:0,x.profit,x.st]);
+   if(num(k.down)>0)py.push([k.date||'',c.name,k.id,'مقدمة',num(k.down),'','','']);
+   (k.payments||[]).forEach((p,i)=>py.push([p.date||'',c.name,k.id,'دفعة '+(i+1),num(p.amount),p.method||'',p.ref||'',p.note||'']))})});
+ return[{n:'العملاء',h:['#','العميل','الهواتف','الحد الائتماني','عدد العقود','الصافي','المدفوع','المتبقي','الربح','الحالة'],r:cn,tot:[3,4,5,6,7,8],w:[6,26,26,14,10,14,14,14,14,12]},
+ {n:'العقود',h:['رقم العقد','العميل','العميل الفرعي','المواد','النوع','التاريخ','الأشهر','الإجمالي','الخصم','الصافي','التكلفة','المقدمة','المدفوع','المتبقي','الربح','الحالة'],r:ct,tot:[7,8,9,10,11,12,13,14],w:[9,24,18,28,12,12,8,13,10,13,13,12,13,13,13,12]},
+ {n:'الدفعات',h:['التاريخ','العميل','العقد','البيان','المبلغ','الطريقة','المرجع','ملاحظة'],r:py,tot:[4],w:[12,24,9,12,13,12,14,24]}]}
+function smsText(co,c,sel,o){o=o||{};const dt=new Date().toLocaleDateString('ar',{day:'numeric',month:'long',year:'numeric'});const dd=d=>o.dates!==false&&d?' — '+d:'';
+ const blocks=sel.map((k,i)=>{const x=cc(k),net=num(k.total)-num(k.discount),L=['▪ عقد '+(i+1)+': '+(k.items||('#'+k.id))+' (#'+k.id+(k.sub?' — '+k.sub:'')+')','الإجمالي: '+fmt(k.total)+(num(k.discount)?' | الخصم: '+fmt(k.discount)+' | الصافي: '+fmt(net):'')];
+  if(num(k.down)>0)L.push('دفعة مقدمة: '+fmt(k.down)+dd(k.date));
+  (k.payments||[]).forEach((p,j)=>L.push('دفعة '+(j+1)+': '+fmt(p.amount)+dd(p.date)+(o.method&&p.method?' ('+p.method+')':'')));
+  L.push('المدفوع: '+fmt(x.paid)+' | المتبقي: '+fmt(Math.max(x.rem,0)));return L.join('\n')});
+ const t=tot({contracts:sel}),head=(o.greet!==false?'السلام عليكم '+c.name+'\n':'')+'كشف حسابكم لدى '+(co.name||'')+' بتاريخ '+dt+':\n',foot='\nإجمالي المتبقي: '+fmt(t.r)+(co.phone?'\nللتواصل: '+co.phone:'');
+ return{blocks,head,foot,full:head+'\n'+blocks.join('\n──────\n')+'\n'+foot}}
+const smsSeg=s=>{const u=/[^\x00-\x7F]/.test(s),L=u?70:160,M=u?67:153;return s.length<=L?1:Math.ceil(s.length/M)};
+const smsLink=(n,t)=>{let d=String(n||'').replace(/\D/g,'');if(d.length===9)d='967'+d;return 'sms:'+(d?'+'+d:'')+'?body='+encodeURIComponent(t)};
+const qp=s=>{try{const b=[];s.replace(/=([0-9A-F]{2})|(.)/gi,(m,h,c)=>{b.push(h?parseInt(h,16):c.charCodeAt(0));return ''});return new TextDecoder('utf-8').decode(new Uint8Array(b))}catch(e){return s}};
+function parseVcf(t){const un=t.replace(/\r/g,'').replace(/=\n/g,'').replace(/\n[ \t]/g,''),out=[];
+ un.split(/BEGIN:VCARD/i).slice(1).forEach(b=>{const tel=[];let fn='',n='';
+  b.split('\n').forEach(l=>{const m=l.match(/^([A-Za-z]+)((?:;[^:]*)?):(.*)$/);if(!m)return;const key=m[1].toUpperCase();let v=m[3];if(m[2].toUpperCase().includes('QUOTED-PRINTABLE'))v=qp(v);
+   if(key==='FN')fn=v.trim();else if(key==='N'&&!n){const p=v.split(';');n=[p[1],p[0]].filter(Boolean).join(' ').trim()}else if(key==='TEL'&&v.trim())tel.push(v.trim())});
+  if(fn||n||tel.length)out.push({name:fn||n,tel})});return out}
+const sha=async s=>{const b=await crypto.subtle.digest('SHA-256',new TextEncoder().encode(s));return Array.from(new Uint8Array(b)).map(x=>x.toString(16).padStart(2,'0')).join('')};
+const b64=u=>{let s='';const a=new Uint8Array(u);for(let i=0;i<a.length;i+=8192)s+=String.fromCharCode.apply(null,a.subarray(i,i+8192));return btoa(s)};
+const unb64=s=>Uint8Array.from(atob(s),c=>c.charCodeAt(0));
+const dkey=async(pw,salt,use)=>{const km=await crypto.subtle.importKey('raw',new TextEncoder().encode(pw),'PBKDF2',false,['deriveKey']);return crypto.subtle.deriveKey({name:'PBKDF2',salt,iterations:200000,hash:'SHA-256'},km,{name:'AES-GCM',length:256},false,[use])};
+async function encJson(obj,pw){const salt=crypto.getRandomValues(new Uint8Array(16)),iv=crypto.getRandomValues(new Uint8Array(12)),key=await dkey(pw,salt,'encrypt');const ct=await crypto.subtle.encrypt({name:'AES-GCM',iv},key,new TextEncoder().encode(JSON.stringify(obj)));return{pessEnc:1,salt:b64(salt),iv:b64(iv),data:b64(ct)}}
+async function decJson(o,pw){const key=await dkey(pw,unb64(o.salt),'decrypt');const buf=await crypto.subtle.decrypt({name:'AES-GCM',iv:unb64(o.iv)},key,unb64(o.data));return JSON.parse(new TextDecoder().decode(buf))}
+const idb2=(op,key,val)=>new Promise(res=>{try{const r=indexedDB.open('pess',1);r.onupgradeneeded=()=>r.result.createObjectStore('s');r.onsuccess=()=>{try{const os=r.result.transaction('s','readwrite').objectStore('s');const q=op==='get'?os.get(key):op==='put'?os.put(val,key):op==='del'?os.delete(key):os.getAllKeys();q.onsuccess=()=>res(q.result===undefined?null:q.result);q.onerror=()=>res(null)}catch(e){res(null)}};r.onerror=()=>res(null)}catch(e){res(null)}});
+function checkData(d){const R=[],t=today(),ids=new Map(),names=new Map(),ph=new Map();const G=(m,k)=>m.get(k)||m.set(k,[]).get(k);
+ d.clients.forEach(c=>{G(names,c.name.trim()).push(c);(c.phones||[]).forEach(p=>{const k=String(p.n).replace(/\D/g,'').slice(-9);if(k.length>=7)G(ph,k).push(c)});
+  const tt=tot(c);if(num(c.credit)>0&&tt.r>num(c.credit))R.push({l:'warn',m:'تجاوز الحد الائتماني: '+c.name,c:c.id});
+  c.contracts.forEach(k=>{G(ids,k.id).push(c);const x=cc(k);
+   if(x.rem<-0.5)R.push({l:'warn',m:'دفع زائد على العقد #'+k.id+' ('+fmt(-x.rem)+') — '+c.name,c:c.id});
+   if(num(k.total)<=0)R.push({l:'warn',m:'عقد #'+k.id+' بإجمالي صفر — '+c.name,c:c.id});
+   (k.payments||[]).forEach((p,i)=>{if(num(p.amount)<=0)R.push({l:'warn',m:'دفعة '+(i+1)+' بمبلغ صفر أو سالب في العقد #'+k.id+' — '+c.name,c:c.id});if(p.date&&p.date>t)R.push({l:'warn',m:'دفعة بتاريخ مستقبلي في العقد #'+k.id+' — '+c.name,c:c.id})})})});
+ ids.forEach((v,k)=>{if(v.length>1)R.unshift({l:'err',m:'رقم عقد مكرر #'+k+' عند: '+v.map(c=>c.name).join('، '),c:v[0].id})});
+ names.forEach((v,k)=>{if(v.length>1)R.push({l:'warn',m:'اسم عميل مكرر: '+k,c:v[0].id})});
+ ph.forEach((v,k)=>{const u=[...new Set(v.map(c=>c.id))];if(u.length>1)R.push({l:'warn',m:'رقم هاتف مشترك '+k+' بين: '+v.map(c=>c.name).join('، '),c:v[0].id})});
+ const all=d.clients.flatMap(c=>c.contracts),nc=all.filter(k=>!num(k.cost)).length,np=all.reduce((m,k)=>m+(k.payments||[]).filter(p=>!p.date).length,0),nph=d.clients.filter(c=>!(c.phones||[]).length).length;
+ if(nc)R.push({l:'info',m:nc+' عقد بدون تكلفة (الربح غير دقيق)'});if(np)R.push({l:'info',m:np+' دفعة بدون تاريخ'});if(nph)R.push({l:'info',m:nph+' عميل بدون رقم هاتف'});return R}
+function NumIn({v,on,...p}){const [s,setS]=useState(String(v??''));const f=useRef(false);useEffect(()=>{if(!f.current)setS(String(v??''))},[v]);
+ return <input {...p} className="inp mono" inputMode="decimal" value={s} onFocus={()=>f.current=true} onBlur={()=>{f.current=false;setS(String(v??''))}} onChange={e=>{setS(e.target.value);on(num(e.target.value))}}/>}
+const L=({t,children})=><label className="block text-xs mb-1" style={{color:'var(--mut)'}}>{t}{children}</label>;
+function Ext({S,o,on}){return (S||[]).length?<div className="grid grid-cols-2 gap-2">{S.map(f=><L key={f.id} t={f.label}>{f.type==='select'?<select className="inp" value={(o.x||{})[f.id]||''} onChange={e=>on(f,e.target.value)}><option value=""></option>{f.opts.map(s=><option key={s}>{s}</option>)}</select>:f.type==='number'?<NumIn v={(o.x||{})[f.id]??''} on={v=>on(f,v)}/>:<input className="inp" type={f.type==='date'?'date':'text'} value={(o.x||{})[f.id]||''} onChange={e=>on(f,e.target.value)}/>}</L>)}</div>:null}
+function Sheet({title,onClose,children,pad}){useEffect(()=>{window.__sh=(window.__sh||0)+1;try{history.pushState({s:1},'')}catch(e){}const h=()=>onClose(true);window.addEventListener('popstate',h);return()=>{window.__sh=Math.max(0,(window.__sh||1)-1);window.removeEventListener('popstate',h)}},[]);
+ return <div className="sheet" onClick={e=>e.target===e.currentTarget&&history.back()}><div style={pad?{paddingBottom:110}:undefined}><div className="flex justify-between items-center mb-3 noprint"><b className="text-lg">{title}</b><button className="text-2xl px-3" onClick={()=>history.back()}>✕</button></div>{children}</div></div>}
+const Chip=({s})=><span className="text-xs px-2 py-0.5 rounded-full text-white" style={{background:COL[s]}}>{s}</span>;
+const Kpi=({l,v,c})=><div className="card p-3" style={{borderTop:'4px solid '+c}}><div className="text-xs" style={{color:'var(--mut)'}}>{l}</div><div className="font-bold text-lg mono">{v}</div></div>;
+
+function ListEd({title,kn,data,mut}){
+ const items=(data.lists&&data.lists[kn])||DEF[kn];const [nw,setNw]=useState('');
+ const used=v=>data.clients.reduce((n,c)=>n+(kn==='res'?c.calls.filter(x=>x.result===v).length:kn==='phl'?c.phones.filter(p=>p.l===v).length:c.contracts.reduce((m,k)=>m+(kn==='types'?(k.type===v?1:0):k.payments.filter(p=>p.method===v).length),0)),0);
+ const setL=(arr,fn,log)=>mut(d=>{d.lists={...DEF,...(d.lists||{}),[kn]:arr};if(fn)fn(d)},log);
+ return <div className="card p-3 space-y-2"><b>{title}</b>
+  {items.map((v,i)=><div key={v+i} className="flex gap-1"><input className="inp" defaultValue={v} onBlur={e=>{const n=e.target.value.trim();if(!n||n===v)return;if(items.includes(n)){e.target.value=v;return}setL(items.map(x=>x===v?n:x),d=>d.clients.forEach(c=>{c.calls.forEach(x=>{if(kn==='res'&&x.result===v)x.result=n});c.phones.forEach(p=>{if(kn==='phl'&&p.l===v)p.l=n});c.contracts.forEach(k=>{if(kn==='types'&&k.type===v)k.type=n;if(kn==='methods')k.payments.forEach(p=>{if(p.method===v)p.method=n})})}),'إعادة تسمية: '+v+' ← '+n)}}/>
+   <button className="px-2" onClick={()=>{const u=used(v);if(u){alert('مستخدم في '+u+' سجل — أعد تسميته بدل الحذف');return}setL(items.filter(x=>x!==v),null,'حذف من القائمة: '+v)}}>🗑</button></div>)}
+  <div className="flex gap-1"><input className="inp" placeholder="عنصر جديد" value={nw} onChange={e=>setNw(e.target.value)}/><button className="btn" onClick={()=>{const n=nw.trim();if(!n||items.includes(n))return;setL([...items,n],null,'إضافة للقائمة: '+n);setNw('')}}>+</button></div></div>}
+function FieldEd({title,e,data,mut}){
+ const fs=(data.schema&&data.schema[e])||[];const [f,setF]=useState({label:'',type:'text',opts:''});
+ const setS=(arr,log)=>mut(d=>{d.schema={c:[],k:[],p:[],...(d.schema||{})};d.schema[e]=arr},log);
+ return <div className="card p-3 space-y-2"><b>{title}</b>
+  {fs.map(x=><div key={x.id} className="flex gap-1 items-center"><input className="inp" defaultValue={x.label} onBlur={ev=>{const n=ev.target.value.trim();if(n&&n!==x.label)setS(fs.map(y=>y.id===x.id?{...y,label:n}:y),'إعادة تسمية حقل: '+x.label+' ← '+n)}}/><span className="text-xs w-12 text-center">{FT[x.type]}</span><button className="px-2" onClick={()=>{if(confirm('حذف الحقل «'+x.label+'» مع كل قيمه؟'))setS(fs.filter(y=>y.id!==x.id),'حذف حقل: '+x.label)}}>🗑</button></div>)}
+  <div className="grid grid-cols-2 gap-1"><input className="inp" placeholder="اسم الحقل الجديد" value={f.label} onChange={ev=>setF({...f,label:ev.target.value})}/><select className="inp" value={f.type} onChange={ev=>setF({...f,type:ev.target.value})}>{Object.entries(FT).map(([k,l])=><option key={k} value={k}>{l}</option>)}</select></div>
+  {f.type==='select'&&<input className="inp" placeholder="الخيارات مفصولة بفاصلة" value={f.opts} onChange={ev=>setF({...f,opts:ev.target.value})}/>}
+  <button className="btn w-full" onClick={()=>{if(!f.label.trim())return;setS([...fs,{id:'f'+Date.now().toString(36),label:f.label.trim(),type:f.type,opts:f.opts.split(/[,،]/).map(z=>z.trim()).filter(Boolean)}],'إضافة حقل: '+f.label.trim());setF({label:'',type:'text',opts:''})}}>+ إضافة حقل</button></div>}
+function TablesSheet({data,mut,close}){
+ const ts=data.tables||[];const [cur,setCur]=useState(null);const [nm,setNm]=useState('');const [q,setQ]=useState('');const t=ts.find(x=>x.id===cur);
+ if(!t)return <Sheet title="الجداول المخصصة" onClose={close}><div className="space-y-2">
+  <p className="text-xs" style={{color:'var(--mut)'}}>أنشئ أي جدول (موردين، مصروفات، مخزون...) بحقولك الخاصة.</p>
+  {ts.map(x=><div key={x.id} className="card p-3 flex justify-between" onClick={()=>setCur(x.id)}><b>{x.name}</b><span className="text-sm">{x.rows.length} سجل ‹</span></div>)}
+  <div className="flex gap-1"><input className="inp" placeholder="اسم الجدول الجديد" value={nm} onChange={e=>setNm(e.target.value)}/><button className="btn" onClick={()=>{const n=nm.trim();if(!n)return;const id='t'+Date.now().toString(36);mut(d=>{d.tables=(d.tables||[]).concat({id,name:n,rows:[]});d.schema={c:[],k:[],p:[],...(d.schema||{})};d.schema['t_'+id]=[{id:'f1',label:'الاسم',type:'text',opts:[]}]},'جدول جديد: '+n);setNm('');setCur(id)}}>+</button></div></div></Sheet>;
+ const fs=(data.schema&&data.schema['t_'+t.id])||[];
+ const upd=(r,f,v)=>mut(d=>{const rw=d.tables.find(x=>x.id===t.id).rows.find(y=>y.id===r.id);(rw.x=rw.x||{})[f.id]=v},'تعديل '+t.name+' ← '+f.label+': '+String(v).slice(0,30),'tb'+t.id+r.id+f.id);
+ const rows=t.rows.filter(r=>!q||JSON.stringify(r.x||{}).includes(q));
+ const exp=()=>{const a=document.createElement('a');a.href=URL.createObjectURL(new Blob(['\uFEFFsep=,\n'+[fs.map(f=>f.label)].concat(t.rows.map(r=>fs.map(f=>(r.x||{})[f.id]||''))).map(r=>r.map(v=>'"'+String(v).replace(/"/g,'""')+'"').join(',')).join('\n')],{type:'text/csv'}));a.download=t.name+'.csv';a.click()};
+ return <Sheet title={t.name} onClose={close}><div className="space-y-2">
+  <button className="text-blue-600 font-bold" onClick={()=>setCur(null)}>‹ كل الجداول</button>
+  <input className="inp" placeholder="🔍 بحث" value={q} onChange={e=>setQ(e.target.value)}/>
+  {fs.filter(f=>f.type==='number').length>0&&<div className="card p-2 text-xs">{fs.filter(f=>f.type==='number').map(f=>f.label+': '+fmt(t.rows.reduce((a,r)=>a+num((r.x||{})[f.id]),0))).join(' · ')}</div>}
+  {rows.map(r=><div key={r.id} className="card p-3 space-y-2"><div className="flex justify-between"><b>#{r.id}</b><button onClick={()=>{if(confirm('حذف السجل؟'))mut(d=>{const tb=d.tables.find(x=>x.id===t.id);tb.rows=tb.rows.filter(y=>y.id!==r.id)},'حذف سجل من '+t.name)}}>🗑</button></div><Ext S={fs} o={r} on={(f,v)=>upd(r,f,v)}/></div>)}
+  <button className="btn w-full" style={{background:'#0f7a3a'}} onClick={()=>mut(d=>{const tb=d.tables.find(x=>x.id===t.id);tb.rows.push({id:nid(tb.rows),x:{}})},'سجل جديد في '+t.name)}>+ سجل جديد</button>
+  <button className="btn w-full" style={{background:'#2563eb'}} onClick={exp}>تصدير CSV</button>
+  <FieldEd title="حقول الجدول" e={'t_'+t.id} data={data} mut={mut}/>
+  <button className="text-red-700 font-bold" onClick={()=>{if(confirm('حذف الجدول «'+t.name+'» بكل سجلاته؟')){mut(d=>{d.tables=d.tables.filter(x=>x.id!==t.id);delete d.schema['t_'+t.id]},'حذف جدول '+t.name);setCur(null)}}}>حذف الجدول</button></div></Sheet>}
+const Chips=({v,on,o})=><div className="flex gap-1 overflow-x-auto pb-1">{o.map(([k,l])=><button key={k} onClick={()=>on(k)} className="px-3 py-2 rounded-full text-sm whitespace-nowrap" style={{background:v===k?'#002244':'var(--card)',color:v===k?'#fff':'var(--tx)'}}>{l}</button>)}</div>;
+const Cr=({r,open})=>{const {c,k,x}=r;return <div className="card p-3" onClick={()=>open(c.id)}><div className="flex justify-between"><b className="text-sm">{c.name}</b><Chip s={x.st}/></div><div className="text-xs" style={{color:'var(--mut)'}}>#{k.id} · {k.type}{k.sub?' · '+k.sub:''} · {k.items}</div><div className="grid grid-cols-2 text-xs mt-1 mono"><span>صافي {fmt(num(k.total)-num(k.discount))}</span><span>مدفوع {fmt(x.paid)}</span><span>باقي {fmt(Math.max(x.rem,0))}</span><span>هامش {mg(k,x).toFixed(0)}%</span></div></div>};
+const SortBar=({o,v,on})=><div className="flex gap-2 items-center"><select className="inp" value={v[0]} onChange={e=>on([e.target.value,v[1]])}>{o.map(([k,l])=><option key={k} value={k}>ترتيب: {l}</option>)}</select><button className="btn" style={{background:'#475569',minWidth:52,padding:0}} onClick={()=>on([v[0],-v[1]])} title="عكس الاتجاه">{v[1]<0?'↓ تنازلي':'↑ تصاعدي'}</button></div>;
+function Reports({cl,dq,open,say}){
+ const [rt,setRt]=useUi('rt','ct');const [f,setF]=useState({ty:'',st:'',ct:'',cr:'',fam:true});const F=(k,v)=>setF({...f,[k]:v});
+ const [so,setSo]=useUi('rso',{});const S=(k,d)=>so[k]||d;const SS=(k,v)=>setSo({...so,[k]:v});
+ const allU=cl.flatMap(c=>c.contracts.map(k=>({c,k,x:cc(k)})));
+ const all=allU.filter(({c,k})=>!dq||(c.name+' '+k.id+' '+k.items+' '+(k.sub||'')).includes(dq));
+ const Sl=({k,o,ph})=><select className="inp" value={f[k]} onChange={e=>F(k,e.target.value)}><option value="">{ph}</option>{o.map(v=><option key={v}>{v}</option>)}</select>;
+ const chips=[['ct','العقود'],['np','بدون دفعات'],['sort','فرز وتصنيف'],['pf','الأرباح والفوائد'],['kp','مؤشرات KPI'],['calls','المكالمات'],['tree','العائلات']];
+ const ST=['مسدد','بدون دفعات','متعثر','متأخر','منتظم'];let b=null;
+ const net=r=>num(r.k.total)-num(r.k.discount);
+ const CG=(s,r)=>s==='id'?r.k.id:s==='rem'?r.x.rem:s==='profit'?r.x.profit:s==='name'?r.c.name:s==='margin'?mg(r.k,r.x):s==='net'?net(r):s==='pct'?r.x.pct:0;
+ const CO=[['id','رقم العقد'],['rem','المتبقي'],['profit','الربح'],['margin','الهامش'],['net','الصافي'],['pct','نسبة التحصيل'],['name','اسم العميل']];
+ const list=(rows,lim)=>rows.slice(0,lim||150).map(r=><Cr key={r.c.id+'-'+r.k.id} r={r} open={open}/>);
+ const Hero=({t,v,s})=><div className="rounded-2xl p-4 text-white" style={{background:'linear-gradient(135deg,#002244,#0f7a3a)'}}><div className="text-xs opacity-80">{t}</div><div className="text-2xl font-bold mono">{v}</div><div className="text-sm mt-1">{s}</div></div>;
+ if(rt==='ct'){const sk=S('ct',['id',-1]),rows=sortBy(all,r=>CG(sk[0],r),sk[1]);b=<><SortBar o={CO} v={sk} on={v=>SS('ct',v)}/><div className="text-xs">{rows.length} عقد</div>{list(rows)}</>}
+ if(rt==='np'){const sk=S('np',['rem',-1]),rows=sortBy(all.filter(a=>a.x.st==='بدون دفعات'),r=>CG(sk[0],r),sk[1]);b=<><SortBar o={[['rem','المتبقي'],['name','اسم العميل'],['id','رقم العقد'],['net','الصافي']]} v={sk} on={v=>SS('np',v)}/><div className="card p-3 flex justify-between"><b>{rows.length} عقد بلا دفعات</b><b className="mono">{fmt(rows.reduce((s,a)=>s+Math.max(a.x.rem,0),0))}</b></div>{list(rows)}</>}
+ if(rt==='sort'){const sk=S('sort',['rem',-1]),rows=sortBy(all.filter(a=>(!f.ty||a.k.type===f.ty)&&(!f.st||a.x.st===f.st)),r=>CG(sk[0],r),sk[1]);
+  b=<><div className="grid grid-cols-2 gap-2"><Sl k="ty" o={TYPES} ph="كل الأنواع"/><Sl k="st" o={ST} ph="كل الحالات"/></div><SortBar o={CO} v={sk} on={v=>SS('sort',v)}/><div className="text-xs">{rows.length} عقد</div>{list(rows)}</>}
+ if(rt==='pf'){const sk=S('pf',['profit',-1]);
+  const rows=cl.filter(c=>c.contracts.length&&(!dq||c.name.includes(dq))&&(!f.ty||c.contracts.some(k=>k.type===f.ty))&&(!f.st||cst(c)===f.st)).map(c=>{const t=tot(c);return{c,t,n:c.contracts.length,m:t.t?t.pr/t.t*100:0}});
+  const G={profit:r=>r.t.pr,margin:r=>r.m,rem:r=>r.t.r,net:r=>r.t.t,name:r=>r.c.name,n:r=>r.n,rp:r=>r.t.rp,paid:r=>r.t.p},sorted=sortBy(rows,G[sk[0]]||G.profit,sk[1]);
+  const T=rows.reduce((a,r)=>({n:a.n+r.n,t:a.t+r.t.t,co:a.co+r.t.co,pr:a.pr+r.t.pr,p:a.p+r.t.p,r:a.r+r.t.r,rp:a.rp+r.t.rp}),{n:0,t:0,co:0,pr:0,p:0,r:0,rp:0});
+  const bt=TYPES.map(y=>{const a=rows.flatMap(r=>r.c.contracts.filter(k=>k.type===y)),n=a.reduce((s,k)=>s+num(k.total)-num(k.discount),0),p=a.reduce((s,k)=>s+cc(k).profit,0);return{y,n:a.length,p,m:n?p/n*100:0}}).filter(r=>r.n),mx=Math.max(1,...bt.map(r=>Math.abs(r.p)));
+  const nc=rows.reduce((n,r)=>n+r.c.contracts.filter(k=>!num(k.cost)).length,0);
+  const exp=()=>{const m=xl('pess-profit-'+today()+'.xlsx',profitSheets(sorted.map(r=>r.c)));say(m==='xlsx'?'تم تصدير Excel ✓':'مكتبة Excel غير محمّلة — تم التصدير بصيغة CSV')};
+  b=<><div className="grid grid-cols-2 gap-2"><Sl k="ty" o={TYPES} ph="كل الأنواع"/><Sl k="st" o={ST} ph="كل الحالات"/></div>
+   <SortBar o={[['profit','الربح'],['margin','الهامش'],['rp','الربح المحصّل'],['rem','المتبقي'],['net','المبيعات'],['paid','المحصّل'],['n','عدد العقود'],['name','الاسم']]} v={sk} on={v=>SS('pf',v)}/>
+   <Hero t={'إجمالي أرباح العملاء المعروضين — '+rows.length+' عميل · '+T.n+' عقد'} v={fmt(T.pr)} s={'هامش '+(T.t?T.pr/T.t*100:0).toFixed(1)+'% · ربح محصّل '+fmt(T.rp)+' · غير محصّل '+fmt(T.pr-T.rp)}/>
+   <div className="grid grid-cols-2 gap-2"><Kpi l="صافي المبيعات" v={fmt(T.t)} c="#2563eb"/><Kpi l="التكلفة" v={fmt(T.co)} c="#64748b"/><Kpi l="المحصّل" v={fmt(T.p)} c="#0f7a3a"/><Kpi l="المتبقي" v={fmt(T.r)} c="#b91c1c"/></div>
+   {nc>0&&<div className="text-xs text-amber-700">⚠ {nc} عقد بلا تكلفة — الربح غير دقيق لها</div>}
+   <button className="btn w-full" style={{background:'#0f7a3a'}} onClick={exp}>📊 تصدير Excel منظم ({rows.length} عميل)</button>
+   {sorted.slice(0,150).map(r=><div key={r.c.id} className="card p-3" onClick={()=>open(r.c.id)}><div className="flex justify-between"><b>{r.c.name}</b><span className="text-xs px-2 rounded-full" style={{background:'var(--bg)'}}>📄 {r.n} عقد</span></div>
+    <div className="grid grid-cols-2 text-xs mt-1 mono gap-y-0.5"><span>مبيعات {fmt(r.t.t)}</span><span>تكلفة {fmt(r.t.co)}</span><span>ربح <b style={{color:r.t.pr<0?'#b91c1c':'#0f7a3a'}}>{fmt(r.t.pr)}</b></span><span>هامش {r.m.toFixed(0)}%</span><span>محصّل {fmt(r.t.p)}</span><span>ربح محصّل {fmt(r.t.rp)}</span></div></div>)}
+   <div className="card p-3 space-y-2"><b>الربح حسب نوع العقد</b>{bt.map(r=><div key={r.y}><div className="flex justify-between text-sm"><span>{r.y} ({r.n})</span><span className="mono">{fmt(r.p)} · {r.m.toFixed(0)}%</span></div><div className="h-2 rounded bg-slate-200"><div className="h-2 rounded" style={{width:Math.max(2,Math.abs(r.p)/mx*100)+'%',background:r.p<0?'#b91c1c':'#0f7a3a'}}/></div></div>)}</div></>}
+ if(rt==='kp'){const tt=tot({contracts:cl.flatMap(c=>c.contracts)}),act=cl.filter(c=>c.contracts.length);
+  const debt=sortBy(act.map(c=>({c,r:tot(c).r})),x=>x.r,-1),top5=debt.slice(0,5),t5=top5.reduce((s,x)=>s+x.r,0);
+  const B=[['0–30 يوم',0,30],['31–60 يوم',31,60],['61–90 يوم',61,90],['أكثر من 90',91,1e9]],ag=B.map(([l])=>({l,n:0,v:0})),und={l:'بدون تاريخ',n:0,v:0};
+  allU.forEach(({k,x})=>{if(x.rem<=0)return;const ds=(k.payments||[]).map(p=>p.date).concat(k.date).filter(Boolean).sort().pop();if(!ds){und.n++;und.v+=x.rem;return}const dd=(Date.now()-new Date(ds+'T00:00'))/864e5;let j=B.findIndex(([l,a,z])=>dd>=a&&dd<z+1);if(j<0)j=dd<0?0:3;ag[j].n++;ag[j].v+=x.rem});
+  const bk=ag.concat([und]),mxa=Math.max(1,...bk.map(x=>x.v));
+  const now=new Date(),mon=[];for(let i=5;i>=0;i--){const d=new Date(now.getFullYear(),now.getMonth()-i,1);mon.push({k:ld(d).slice(0,7),v:0})}
+  cl.forEach(c=>c.contracts.forEach(k=>k.payments.forEach(p=>{const e=mon.find(x=>x.k===(p.date||'').slice(0,7));if(e)e.v+=num(p.amount)})));const mxm=Math.max(1,...mon.map(x=>x.v));
+  const late=allU.filter(a=>a.x.st==='متعثر'||a.x.st==='متأخر'),over=cl.filter(c=>num(c.credit)>0&&tot(c).r>num(c.credit)).length,nn=allU.length;
+  b=<><div className="grid grid-cols-2 gap-2"><Kpi l="نسبة التحصيل" v={(tt.t?tt.p/tt.t*100:0).toFixed(1)+'%'} c="#0f7a3a"/><Kpi l="هامش الربح" v={(tt.t?tt.pr/tt.t*100:0).toFixed(1)+'%'} c="#f59e0b"/><Kpi l="ربح محصّل" v={fmt(tt.rp)} c="#0f7a3a"/><Kpi l="ربح غير محصّل" v={fmt(tt.pr-tt.rp)} c="#b45309"/>
+   <Kpi l="متوسط قيمة العقد" v={fmt(nn?tt.t/nn:0)} c="#2563eb"/><Kpi l="متوسط المتبقي للعميل" v={fmt(act.length?tt.r/act.length:0)} c="#2563eb"/><Kpi l="تركّز أعلى 5 مدينين" v={(tt.r?t5/tt.r*100:0).toFixed(0)+'%'} c="#b91c1c"/><Kpi l="عقود متأخرة/متعثرة" v={late.length+' · '+fmt(late.reduce((s,a)=>s+Math.max(a.x.rem,0),0))} c="#b91c1c"/>
+   <Kpi l="عملاء بدون عقود" v={cl.length-act.length} c="#64748b"/><Kpi l="تجاوز الحد الائتماني" v={over} c={over?'#b91c1c':'#0f7a3a'}/></div>
+   <div className="card p-3 space-y-2"><b>أعمار الديون (منذ آخر دفعة/عقد)</b>{bk.map(x=><div key={x.l}><div className="flex justify-between text-sm"><span>{x.l} ({x.n})</span><span className="mono">{fmt(x.v)}</span></div><div className="h-2 rounded bg-slate-200"><div className="h-2 rounded" style={{width:Math.max(x.v?2:0,x.v/mxa*100)+'%',background:x.l==='أكثر من 90'?'#b91c1c':x.l==='بدون تاريخ'?'#64748b':'#f59e0b'}}/></div></div>)}</div>
+   <div className="card p-3"><b>التحصيل الشهري (آخر 6 أشهر)</b><div className="flex items-end gap-2 mt-2" style={{height:110}}>{mon.map(x=><div key={x.k} className="flex-1 text-center text-xs"><div className="mono" style={{fontSize:10}}>{x.v?fmt(x.v/1000)+'k':''}</div><div style={{height:Math.max(3,x.v/mxm*80),background:'#0f7a3a',borderRadius:4}}/><div>{x.k.slice(5)}</div></div>)}</div><div className="text-xs mt-1" style={{color:'var(--mut)'}}>من الدفعات المؤرخة فقط</div></div>
+   <div className="card p-3 space-y-1"><b>أكبر 5 مدينين</b>{top5.map(x=><div key={x.c.id} className="flex justify-between text-sm" onClick={()=>open(x.c.id)}><span>{x.c.name}</span><b className="mono">{fmt(x.r)}</b></div>)}</div></>}
+ if(rt==='calls'){const sk=S('calls',['date',-1]);const G={date:r=>r.x.date||'',name:r=>r.c.name,result:r=>r.x.result||''};
+  const rows=sortBy(cl.filter(c=>!dq||c.name.includes(dq)).flatMap(c=>c.calls.map(x=>({c,x}))).filter(r=>(!f.ct||r.x.type===f.ct)&&(!f.cr||r.x.result===f.cr)),G[sk[0]],sk[1]);
+  b=<><div className="grid grid-cols-2 gap-2"><Sl k="ct" o={['اتصال','واتساب','زيارة']} ph="كل الأنواع"/><Sl k="cr" o={RES} ph="كل النتائج"/></div><SortBar o={[['date','التاريخ'],['name','العميل'],['result','النتيجة']]} v={sk} on={v=>SS('calls',v)}/>{rows.length===0&&<div className="card p-3 text-sm">لا توجد مكالمات مسجلة</div>}{rows.map((r,i)=><div key={i} className="card p-3 text-sm" onClick={()=>open(r.c.id)}><b>{r.c.name}</b><div className="text-xs" style={{color:'var(--mut)'}}>{r.x.date} · {r.x.type} · {r.x.result}</div>{r.x.note&&<div>{r.x.note}</div>}</div>)}</>}
+ if(rt==='tree'){const sk=S('tree',['rem',-1]);const G={rem:c=>tot(c).r,name:c=>c.name,use:c=>num(c.credit)?tot(c).r/num(c.credit):0};
+  const cs=sortBy(cl.filter(c=>(!dq||(c.name+' '+c.contracts.map(k=>k.sub||'').join(' ')).includes(dq))&&(!f.fam||c.contracts.some(k=>k.sub))),G[sk[0]],sk[1]);
+  b=<><SortBar o={[['rem','المتبقي'],['name','الاسم'],['use','استخدام الحد']]} v={sk} on={v=>SS('tree',v)}/><label className="text-sm"><input type="checkbox" checked={f.fam} onChange={e=>F('fam',e.target.checked)}/> العائلات التي لها عملاء فرعيون فقط</label>{cs.map(c=>{const t=tot(c),g={};c.contracts.forEach(k=>{const n=k.sub||'— عقود مباشرة';(g[n]=g[n]||[]).push(k)});const used=num(c.credit)?t.r/num(c.credit)*100:0;
+   return <div key={c.id} className="card p-3 space-y-1"><div className="flex justify-between" onClick={()=>open(c.id)}><b>👤 {c.name}</b><span className="mono text-sm">{fmt(t.r)}</span></div>{num(c.credit)>0&&<div className="text-xs" style={{color:used>100?'#b91c1c':'var(--mut)'}}>الحد الائتماني {fmt(c.credit)} — مستخدم {used.toFixed(0)}%</div>}
+   {Object.entries(g).map(([n,ks])=><div key={n} className="mr-4 pr-2" style={{borderRight:'2px solid var(--bd)'}}><div className="flex justify-between text-sm"><span>↳ {n}</span><span className="mono">{fmt(ks.reduce((s,k)=>s+Math.max(cc(k).rem,0),0))}</span></div>{ks.map(k=><div key={k.id} className="text-xs" style={{color:'var(--mut)'}}>#{k.id} {k.items}</div>)}</div>)}</div>})}</>}
+ return <div className="p-3 space-y-2"><Chips v={rt} on={setRt} o={chips}/>{b}</div>}
+function MsgCard({t,ph,edit,say}){const [cp,setCp]=useState(false);const seg=smsSeg(t);
+ const copy=async()=>{try{await navigator.clipboard.writeText(t);setCp(true);setTimeout(()=>setCp(false),1500)}catch(e){say&&say('تعذّر النسخ')}};
+ return <div className="card p-3 space-y-2"><textarea className="inp" style={{minHeight:170,direction:'rtl',lineHeight:1.7}} value={t} readOnly={!edit} onChange={e=>edit&&edit(e.target.value)}/>
+  <div className="text-xs" style={{color:'var(--mut)'}}>{t.length} حرف · ≈ {seg} رسالة SMS</div>
+  <div className="flex gap-2 flex-wrap"><a className="btn flex items-center" style={{background:'#0f7a3a'}} href={smsLink(ph,t)}>✉ SMS</a><a className="btn flex items-center" style={{background:'#128c7e'}} target="_blank" href={wa(ph,t)}>💬 واتساب</a><button className="btn" style={{background:'#475569'}} onClick={copy}>{cp?'✓ تم النسخ':'📋 نسخ'}</button></div></div>}
+function StatementSheet({c,co,close,mut,say}){
+ const [ids,setIds]=useState(()=>c.contracts.map(k=>k.id));const [op,setOp]=useState(true);const [view,setView]=useState('doc');const [srt,setSrt]=useUi('stsort',['id',1]);
+ const [o,setO]=useState({det:true,hidePaid:false,group:true,logo:!!(co.logo&&co.logoEnabled),stamp:!!(co.stamp&&co.stampEnabled),sign:!!(co.sign&&co.signEnabled),qr:!!co.qrEnabled,note:''});
+ const [mo,setMo]=useState({dates:true,method:false,split:false,greet:true});const [ph,setPh]=useState((c.phones[0]&&c.phones[0].n)||'');const [ed,setEd]=useState(null);
+ const ordered=sortBy(c.contracts,k=>ctKey(k,srt[0]),srt[1]);
+ const opts={...o,ids,sk:srt[0],sd:srt[1]};const sel=ordered.filter(k=>ids.includes(k.id)&&(!o.hidePaid||cc(k).rem>0));const html=stmtBody(co,c,opts);
+ const subs=[...new Set(c.contracts.map(k=>k.sub).filter(Boolean))];
+ const tg=id=>setIds(a=>a.includes(id)?a.filter(x=>x!==id):[...a,id]);
+ const setSub=(k,v)=>mut(d=>{d.clients.find(x=>x.id===c.id).contracts.find(y=>y.id===k.id).sub=v},'تعديل العميل الفرعي عقد #'+k.id+' — '+c.name,'sub'+k.id);
+ const renSub=n=>{const v=prompt('الاسم الجديد للعميل الفرعي',n);if(v==null||!v.trim()||v.trim()===n)return;mut(d=>{d.clients.find(x=>x.id===c.id).contracts.forEach(k=>{if(k.sub===n)k.sub=v.trim()})},'إعادة تسمية عميل فرعي: '+n+' ← '+v.trim())};
+ const T=(k,l,dis)=>!dis&&<label className="flex items-center gap-1 text-sm"><input type="checkbox" checked={!!o[k]} onChange={e=>setO({...o,[k]:e.target.checked})}/>{l}</label>;
+ const M=(k,l)=><label className="flex items-center gap-1 text-sm"><input type="checkbox" checked={!!mo[k]} onChange={e=>{setMo({...mo,[k]:e.target.checked});setEd(null)}}/>{l}</label>;
+ const full='<!DOCTYPE html><html lang="ar" dir="rtl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>كشف حساب - '+esc(c.name)+'</title><link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;700&display=swap" rel="stylesheet"><style>@page{size:A4;margin:12mm}body{margin:0;background:#e2e8f0}@media print{body{background:#fff}}</style></head><body>'+html+'</body></html>';
+ const save=()=>{dlBlob('كشف-'+c.name+'-'+today()+'.html',new Blob([full],{type:'text/html'}))};
+ const prn=()=>{try{window.print()}catch(e){say('الطباعة غير متاحة هنا — احفظ HTML ثم اطبعه')}};
+ const none=!sel.length,sm=smsText(co,c,sel,mo),msgs=mo.split?sm.blocks.map(b=>sm.head+'\n'+b+'\n'+(co.phone?'للتواصل: '+co.phone:'')):[sm.full];
+ return <Sheet title={'كشف حساب — '+c.name} onClose={close}>
+  <div className="noprint space-y-2 mb-3">
+   <Chips v={view} on={setView} o={[['doc','📄 الكشف / الطباعة'],['sms','✉ رسالة نصية']]}/>
+   <button className="text-blue-600 font-bold" onClick={()=>setOp(!op)}>{op?'▼':'◀'} اختيار العقود ({sel.length} من {c.contracts.length})</button>
+   {op&&<div className="card p-3 space-y-2">
+    <div className="flex gap-2 flex-wrap text-sm"><button className="px-3 py-1 rounded-lg" style={{background:'var(--bg)'}} onClick={()=>setIds(c.contracts.map(k=>k.id))}>تحديد الكل</button><button className="px-3 py-1 rounded-lg" style={{background:'var(--bg)'}} onClick={()=>setIds(c.contracts.filter(k=>cc(k).rem>0).map(k=>k.id))}>الذي عليه متبقي</button><button className="px-3 py-1 rounded-lg" style={{background:'var(--bg)'}} onClick={()=>setIds([])}>إلغاء الكل</button></div>
+    <SortBar o={[['id','رقم العقد'],['rem','المتبقي'],['sub','العميل الفرعي'],['items','المواد']]} v={srt} on={setSrt}/>
+    {subs.length>0&&<div className="flex gap-1 flex-wrap text-sm">{subs.map(n=><span key={n} className="px-2 py-1 rounded-full" style={{background:'var(--bg)'}}><button onClick={()=>setIds(c.contracts.filter(k=>k.sub===n).map(k=>k.id))}>👥 {n}</button> <button onClick={()=>renSub(n)}>✎</button></span>)}</div>}
+    <datalist id="subl">{subs.map(n=><option key={n} value={n}/>)}</datalist>
+    {ordered.map(k=>{const x=cc(k);return <div key={k.id} className="p-2 rounded-lg space-y-1" style={{background:'var(--bg)',opacity:ids.includes(k.id)?1:.55}}>
+     <label className="flex items-center gap-2 text-sm"><input type="checkbox" checked={ids.includes(k.id)} onChange={()=>tg(k.id)}/><b className="flex-1">#{k.id} {k.items||'عقد'}</b><span className="mono">باقي {fmt(Math.max(x.rem,0))}</span></label>
+     <input className="inp" list="subl" placeholder="العميل الفرعي (اختياري) — اكتب أو اختر" value={k.sub||''} onChange={e=>setSub(k,e.target.value)}/></div>})}</div>}
+  </div>
+  {view==='doc'&&<>
+   <div className="noprint card p-3 space-y-2 mb-3"><div className="grid grid-cols-2 gap-1">{T('det','تفاصيل الدفعات')}{T('hidePaid','إخفاء العقود المسددة')}{T('group','تجميع حسب العميل الفرعي')}{T('qr','رمز QR')}{T('logo','الشعار',!co.logo)}{T('stamp','الختم',!co.stamp)}{T('sign','التوقيع',!co.sign)}</div>
+    <input className="inp" placeholder="ملاحظة تظهر أسفل الكشف (اختياري)" value={o.note} onChange={e=>setO({...o,note:e.target.value})}/>
+    <div className="flex gap-2 flex-wrap"><button disabled={none} className="btn" style={{background:none?'#94a3b8':'#002244'}} onClick={save}>💾 حفظ HTML</button><button disabled={none} className="btn" style={{background:none?'#94a3b8':'#2563eb'}} onClick={prn}>🖨 طباعة / PDF</button></div>
+    <div className="text-xs" style={{color:'var(--mut)'}}>الطباعة تشمل العقود المحددة فقط. للحصول على PDF اختر «حفظ كـ PDF» من نافذة الطباعة. إن لم تظهر النافذة فاحفظ HTML وافتحه في Chrome ثم اطبع.</div></div>
+   <div style={{overflow:'auto',borderRadius:12}} dangerouslySetInnerHTML={{__html:html}}/></>}
+  {view==='sms'&&<div className="space-y-2">
+   <div className="card p-3 space-y-2"><L t="رقم المستلم"><div className="flex gap-1">{c.phones.length>0&&<select className="inp" style={{maxWidth:130}} value={ph} onChange={e=>setPh(e.target.value)}>{[...new Set(c.phones.map(p=>p.n))].map(n=><option key={n}>{n}</option>)}</select>}<input className="inp mono" inputMode="tel" value={ph} onChange={e=>setPh(e.target.value)} placeholder="رقم الجوال"/></div></L>
+    <div className="grid grid-cols-2 gap-1">{M('dates','إظهار التواريخ')}{M('method','إظهار طريقة الدفع')}{M('split','رسالة منفصلة لكل عقد')}{M('greet','التحية في البداية')}</div>
+    <div className="text-xs" style={{color:'var(--mut)'}}>تُرسل الرسالة للعقود المحددة فقط ({sel.length}). الصيغة: دفعة مقدمة، ثم دفعة 1، دفعة 2… مع التواريخ.</div></div>
+   {none?<div className="card p-4 text-center text-sm">اختر عقداً واحداً على الأقل</div>:mo.split?msgs.map((m,i)=><MsgCard key={i} t={m} ph={ph} say={say}/>):<MsgCard t={ed!==null?ed:msgs[0]} edit={setEd} ph={ph} say={say}/>}</div>}
+ </Sheet>}
+function PaymentsTab({cl,dq,open,mut,say}){
+ const [pk,setPk]=useUi('pmk','m');const [cf,setCf]=useState('');const [ct,setCt]=useState('');const [mt,setMt]=useState('');const [sk,setSk]=useUi('pms',['date',-1]);
+ const all=useMemo(()=>cl.flatMap(c=>c.contracts.flatMap(k=>k.payments.map(p=>({c,k,p,d:/^\d{4}-\d{2}-\d{2}/.test(p.date||'')?p.date.slice(0,10):''})))),[cl]);
+ const hit=r=>(!dq||(r.c.name+' '+r.k.id+' '+r.k.items+' '+(r.k.sub||'')).includes(dq))&&(!mt||r.p.method===mt);
+ const [a,b]=periodRange(pk,cf,ct);const inR=(r,x,y)=>r.d&&r.d>=x&&r.d<=y;
+ const G={date:r=>r.d,amt:r=>num(r.p.amount),client:r=>r.c.name,method:r=>r.p.method||''};
+ const rows=sortBy(all.filter(r=>hit(r)&&(pk==='nd'?!r.d:pk==='all'?true:inR(r,a,b))),G[sk[0]]||G.date,sk[1]);
+ const sum=rows.reduce((s,r)=>s+num(r.p.amount),0),avg=rows.length?sum/rows.length:0,und=all.filter(r=>!r.d).length;
+ const canCmp=['today','yday','w7','m','pm','y'].includes(pk)||(pk==='c'&&cf&&ct);let dlt=null;
+ if(canCmp){const [x,y]=prevRange(pk,a,b);const ps=all.filter(r=>hit(r)&&inR(r,x,y)).reduce((s,r)=>s+num(r.p.amount),0);if(ps>0)dlt=(sum-ps)/ps*100}
+ const label=pk==='m'||pk==='pm'?monthName(a):pk==='all'?'كل الفترات':pk==='nd'?'دفعات بدون تاريخ':a===b?a:(a.startsWith('0000')?'':'من '+a+' ')+'إلى '+(b.startsWith('9999')?'الآن':b);
+ const bm={};rows.forEach(r=>{const m=r.p.method||'—';bm[m]=(bm[m]||0)+num(r.p.amount)});const ms=Object.entries(bm).sort((x,y)=>y[1]-x[1]);
+ const days=[];if(!['all','nd','c'].includes(pk)||(pk==='c'&&cf&&ct)){for(let t=new Date(a+'T00:00');ld(t)<=b&&days.length<62;t.setDate(t.getDate()+1))days.push(ld(t))}
+ const byD={};rows.forEach(r=>{if(r.d)byD[r.d]=(byD[r.d]||0)+num(r.p.amount)});const mx=Math.max(1,...days.map(d=>byD[d]||0));
+ const g={};rows.slice(0,400).forEach(r=>{const k=sk[0]==='date'?(r.d||'—'):'*';(g[k]=g[k]||[]).push(r)});const keys=Object.keys(g);
+ const yd=ld(new Date(Date.now()-864e5));const dl=d=>d==='*'?'النتائج':d==='—'?'بدون تاريخ':(d===today()?'اليوم · ':d===yd?'أمس · ':'')+new Date(d+'T00:00').toLocaleDateString('ar',{weekday:'long',day:'numeric',month:'long'});
+ const setD=(r,v)=>{if(!v)return;if(!confirm('تحديد تاريخ الدفعة ('+fmt(num(r.p.amount))+') للعميل «'+r.c.name+'» بـ '+v+'؟'))return;mut(d=>{d.clients.find(x=>x.id===r.c.id).contracts.find(y=>y.id===r.k.id).payments.find(z=>z.id===r.p.id).date=v},'تحديد تاريخ دفعة عقد #'+r.k.id+' — '+r.c.name+' ← '+v)};
+ const exp=()=>{const m=xl('pess-payments-'+pk+'-'+today()+'.xlsx',paySheets(rows,label,sum,dlt));say(m==='xlsx'?'تم تصدير Excel ✓':'مكتبة Excel غير محمّلة — تم التصدير بصيغة CSV')};
+ return <div className="p-3 space-y-3">
+  <Chips v={pk} on={setPk} o={PERIODS}/>
+  {pk==='c'&&<div className="grid grid-cols-2 gap-2"><L t="من تاريخ"><input type="date" className="inp" value={cf} onChange={e=>setCf(e.target.value)}/></L><L t="إلى تاريخ"><input type="date" className="inp" value={ct} onChange={e=>setCt(e.target.value)}/></L></div>}
+  <div className="rounded-2xl p-4 text-white" style={{background:'linear-gradient(135deg,#002244,#0f7a3a)'}}><div className="text-sm opacity-80">{label}</div><div className="text-3xl font-bold mono">{fmt(sum)}</div>
+   <div className="text-sm flex gap-3 flex-wrap mt-1"><span>{rows.length} دفعة</span><span>المتوسط {fmt(avg)}</span>{dlt!=null&&<span>{dlt>=0?'▲':'▼'} {Math.abs(dlt).toFixed(0)}% عن الفترة السابقة</span>}</div></div>
+  {und>0&&pk!=='nd'&&<button className="card p-3 text-sm w-full text-right" onClick={()=>setPk('nd')}>⚠ {und} دفعة بدون تاريخ لا تظهر ضمن الفترات — اضغط لعرضها وتحديد تواريخها</button>}
+  {days.length>1&&sum>0&&<div className="card p-3"><div className="flex items-end gap-px" style={{height:80}}>{days.map(d=><div key={d} title={d+': '+fmt(byD[d]||0)} style={{flex:1,minWidth:2,height:Math.max(2,(byD[d]||0)/mx*100)+'%',background:byD[d]?'#0f7a3a':'var(--bd)',borderRadius:2}}/>)}</div><div className="flex justify-between text-xs mt-1" style={{color:'var(--mut)'}}><span>{days[0].slice(5)}</span><span>{days[days.length-1].slice(5)}</span></div></div>}
+  {ms.length>0&&<div className="card p-3 space-y-1"><b className="text-sm">حسب طريقة الدفع</b>{ms.map(([m,v])=><div key={m} className="text-sm"><div className="flex justify-between"><span>{m}</span><span className="mono">{fmt(v)} · {(sum?v/sum*100:0).toFixed(0)}%</span></div><div className="h-1.5 rounded bg-slate-200"><div className="h-1.5 rounded" style={{width:(sum?v/sum*100:0)+'%',background:'#002244'}}/></div></div>)}</div>}
+  <select className="inp" value={mt} onChange={e=>setMt(e.target.value)}><option value="">كل طرق الدفع</option>{METHODS.map(m=><option key={m}>{m}</option>)}</select>
+  <SortBar o={[['date','التاريخ'],['amt','المبلغ'],['client','العميل'],['method','طريقة الدفع']]} v={sk} on={setSk}/>
+  {rows.length>0&&<button className="btn w-full" style={{background:'#0f7a3a'}} onClick={exp}>📊 تصدير Excel للفترة ({rows.length} دفعة)</button>}
+  {rows.length===0&&<div className="card p-4 text-center text-sm">لا توجد دفعات في هذه الفترة</div>}
+  {keys.map(k=><div key={k} className="space-y-1"><div className="flex justify-between text-xs px-1 pt-1" style={{color:'var(--mut)'}}><b>{dl(k)}</b><span className="mono">{fmt(g[k].reduce((s,r)=>s+num(r.p.amount),0))}</span></div>
+   {g[k].map(r=><div key={r.c.id+'-'+r.k.id+'-'+r.p.id} className="card p-3"><div className="flex justify-between items-center" onClick={()=>open(r.c.id)}><div><b className="text-sm">{r.c.name}</b><div className="text-xs" style={{color:'var(--mut)'}}>#{r.k.id}{r.k.sub?' · '+r.k.sub:''} · {r.p.method}{r.p.ref?' · '+r.p.ref:''}{sk[0]!=='date'&&r.d?' · '+r.d:''}</div></div><b className="mono text-green-700">+{fmt(num(r.p.amount))}</b></div>
+    {pk==='nd'&&<input type="date" className="inp mt-2" value="" onChange={e=>setD(r,e.target.value)}/>}</div>)}</div>)}
+  {rows.length>400&&<div className="text-xs text-center">عرض أول 400 دفعة — ضيّق الفترة أو صدّر Excel</div>}</div>}
+class EB extends React.Component{constructor(p){super(p);this.state={e:null}}static getDerivedStateFromError(e){return{e}}
+ render(){if(!this.state.e)return this.props.children;return <div style={{padding:20,fontFamily:'Cairo,sans-serif',direction:'rtl'}}><h2 style={{fontSize:20,fontWeight:700}}>⚠ حدث خطأ غير متوقع</h2><p style={{margin:'8px 0'}}>بياناتك محفوظة في الهاتف. حمّل نسخة طوارئ ثم أعد التحميل.</p><pre style={{whiteSpace:'pre-wrap',fontSize:12,color:'#b91c1c'}}>{String(this.state.e&&this.state.e.message)}</pre><button className="btn" onClick={()=>{try{const x=localStorage.getItem(K)||localStorage.getItem(KB)||'{}';dlBlob('PESS-emergency-'+today()+'.json',new Blob([x],{type:'application/json'}))}catch(e){}}}>⬇ تحميل نسخة طوارئ</button> <button className="btn" style={{background:'#0f7a3a'}} onClick={()=>location.reload()}>إعادة تحميل</button></div>}}
+function Lock({onOk}){const [pin,setPin]=useState('');const [err,setErr]=useState('');const bad=useRef(0),until=useRef(0);
+ let cfg=null;try{cfg=JSON.parse(localStorage.getItem('pess_pin'))}catch(e){}const n=(cfg&&cfg.n)||4;
+ const tryPin=async p=>{if(Date.now()<until.current){setErr('انتظر قليلاً ثم أعد المحاولة');setPin('');return}if(!cfg){onOk();return}
+  if((await sha(cfg.s+p))===cfg.h){onOk();return}bad.current++;setPin('');if(bad.current>=5){until.current=Date.now()+30000;bad.current=0;setErr('محاولات كثيرة — انتظر 30 ثانية')}else setErr('رمز خاطئ')};
+ const add=d=>{if(pin.length>=n)return;const p=pin+d;setPin(p);setErr('');if(p.length===n)tryPin(p)};
+ return <div style={{position:'fixed',inset:0,zIndex:100,background:'linear-gradient(160deg,#002244,#0f7a3a)',color:'#fff',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',gap:14}}>
+  <div style={{fontSize:46}}>🔒</div><b className="text-xl">PESS V27</b><div className="text-sm" style={{opacity:.8}}>أدخل رمز الدخول</div>
+  <div style={{display:'flex',gap:10}}>{Array.from({length:n}).map((_,i)=><span key={i} style={{width:14,height:14,borderRadius:7,background:i<pin.length?'#fff':'rgba(255,255,255,.3)'}}/>)}</div>
+  <div className="text-sm" style={{minHeight:22,color:'#fecaca'}}>{err}</div>
+  <div style={{display:'grid',gridTemplateColumns:'repeat(3,72px)',gap:12}}>{['1','2','3','4','5','6','7','8','9','','0','⌫'].map((k,i)=>k===''?<span key={i}/>:<button key={i} onClick={()=>k==='⌫'?setPin(pin.slice(0,-1)):add(k)} style={{height:72,borderRadius:36,background:'rgba(255,255,255,.15)',fontSize:24,color:'#fff'}}>{k}</button>)}</div></div>}
+function ClientEditor({base,mut:gmut,close,say,co,sch,onStmt,snap}){
+ const [draft,setDraft]=useState(()=>structuredClone(base));const dr=useRef(draft);const [logs,setLogs]=useState({});const logsR=useRef({});logsR.current=logs;
+ const [ask,setAsk]=useState(false);const force=useRef(false);const n=Object.keys(logs).length;
+ const dm=(fn,log,key)=>{const nn=structuredClone(dr.current),w={clients:[nn]};fn(w);
+  if(!w.clients.length){gmut(d=>{d.clients=d.clients.filter(x=>x.id!==nn.id)},log||'حذف عميل');force.current=true;return}
+  dr.current=w.clients[0];setDraft(dr.current);const L=log||'تعديل';setLogs(l=>({...l,[key||L]:L}))};
+ const commit=()=>{const L=Object.values(logsR.current);if(!L.length)return;if(snap)snap();gmut(d=>{const i=d.clients.findIndex(x=>x.id===dr.current.id);if(i>=0)d.clients[i]=structuredClone(dr.current)},['حفظ تعديلات «'+dr.current.name+'» ('+L.length+' تعديل)'].concat(L));setLogs({});say('تم حفظ التعديلات ✓')};
+ const undo=()=>{if(!confirm('تجاهل كل التعديلات غير المحفوظة؟'))return;dr.current=structuredClone(base);setDraft(dr.current);setLogs({})};
+ const cl=()=>{if(force.current||!Object.keys(logsR.current).length){close();return}try{history.pushState({s:1},'')}catch(e){}setAsk(true)};
+ const go=()=>{force.current=true;setAsk(false);history.back()};
+ return <>
+  <ClientSheet c={draft} mut={dm} close={cl} say={say} co={co} sch={sch} pad={n>0} onStmt={()=>{if(!n){onStmt();return}if(confirm('لديك '+n+' تعديل غير محفوظ. حفظها قبل المتابعة؟ (إلغاء = البقاء هنا)')){commit();onStmt()}}}/>
+  {n>0&&<div style={{position:'fixed',left:0,right:0,bottom:0,zIndex:60,padding:'10px 12px calc(10px + env(safe-area-inset-bottom,0px))',background:'var(--card)',borderTop:'2px solid #f59e0b',display:'flex',gap:8,alignItems:'center'}}><span className="text-sm flex-1">⚠ {n} تعديل غير محفوظ</span><button className="btn" style={{background:'#64748b'}} onClick={undo}>تراجع</button><button className="btn" style={{background:'#0f7a3a'}} onClick={commit}>💾 حفظ</button></div>}
+  {ask&&<div className="sheet" style={{zIndex:70,alignItems:'center'}}><div className="card" style={{margin:20,padding:20,borderRadius:20,textAlign:'center'}}><b className="block text-lg mb-1">تعديلات غير محفوظة</b><div className="text-sm mb-3" style={{color:'var(--mut)'}}>{n} تعديل على «{draft.name}» لم يُحفظ بعد.</div><div className="space-y-2"><button className="btn w-full" style={{background:'#0f7a3a'}} onClick={()=>{commit();go()}}>💾 حفظ وإغلاق</button><button className="btn w-full" style={{background:'#b91c1c'}} onClick={go}>تجاهل التعديلات</button><button className="btn w-full" style={{background:'#64748b'}} onClick={()=>setAsk(false)}>متابعة التعديل</button></div></div></div>}</>}
+function ContactsSheet({cl,mut,close,say}){
+ const [items,setItems]=useState([]);const [msg,setMsg]=useState('');const [sk,setSk]=useState(['name',1]);
+ const norm=s=>String(s||'').replace(/[\u064B-\u0652\u0640]/g,'').replace(/[أإآ]/g,'ا').replace(/ى/g,'ي').replace(/ة/g,'ه').replace(/\s+/g,' ').trim().toLowerCase();
+ const dig=p=>String(p).replace(/\D/g,'').slice(-9);
+ const build=list=>{const idx=new Map(cl.map(c=>[norm(c.name),c.id]));setItems(list.filter(x=>x.name||x.tel.length).map((x,i)=>({i,name:x.name||x.tel[0],tel:[...new Set(x.tel.map(t=>t.replace(/[^\d+]/g,'')).filter(Boolean))],to:idx.get(norm(x.name))||0,on:true})))};
+ const pick=async()=>{setMsg('');try{if(!(navigator.contacts&&navigator.contacts.select))throw 0;const r=await navigator.contacts.select(['name','tel'],{multiple:true});build(r.map(x=>({name:(x.name&&x.name[0])||'',tel:(x.tel||[]).map(String)})))}catch(e){setMsg(e&&e.name==='SecurityError'?'المتصفح يمنع الوصول لجهات الاتصال من هذه الصفحة. افتح الرابط مباشرة في Chrome.':e&&e.name==='NotAllowedError'?'تم رفض الإذن بالوصول لجهات الاتصال.':'اختيار جهات الاتصال المباشر غير متاح هنا (يعمل في Chrome على أندرويد عند فتح الصفحة مباشرة عبر HTTPS). بديل: من تطبيق جهات الاتصال اختر «تصدير» إلى ملف .vcf ثم ارفعه هنا.')}};
+ const file=e=>{const f=e.target.files[0];e.target.value='';if(!f)return;const r=new FileReader();r.onload=()=>{const v=parseVcf(String(r.result));if(!v.length)setMsg('لم يتم العثور على جهات اتصال في الملف');else{setMsg('');build(v)}};r.readAsText(f,'utf-8')};
+ const sorted=sortBy(items,x=>sk[0]==='st'?(x.to?1:0):x.name,sk[1]);const set=(i,p)=>setItems(a=>a.map(x=>x.i===i?{...x,...p}:x));const chosen=items.filter(x=>x.on);
+ const apply=()=>{if(!chosen.length)return;let nw=0,lk=0,ph=0;
+  mut(d=>{chosen.forEach(x=>{if(x.to){const c=d.clients.find(y=>y.id===x.to);if(!c)return;lk++;x.tel.forEach(t=>{if(!c.phones.some(p=>dig(p.n)===dig(t))){c.phones.push({n:t,l:'مستورد'});ph++}})}else{const id=nid(d.clients);d.clients.push({id,name:x.name,x:{},phones:x.tel.map(t=>({n:t,l:'مستورد'})),credit:0,calls:[],contracts:[]});nw++;ph+=x.tel.length}})},'استيراد جهات اتصال');say('تم الاستيراد: '+nw+' جديد · '+lk+' مرتبط');history.back()};
+ const sc=[...cl].sort((a,b)=>a.name.localeCompare(b.name,'ar'));
+ return <Sheet title="استيراد من جهات الاتصال" onClose={close}><div className="space-y-2">
+  <div className="card p-3 space-y-2"><div className="flex gap-2 flex-wrap"><button className="btn" style={{background:'#0f7a3a'}} onClick={pick}>📇 اختيار من جهات الاتصال</button><label className="btn flex items-center" style={{background:'#2563eb'}}>📄 ملف vCard (.vcf)<input type="file" accept=".vcf,text/vcard,text/x-vcard" hidden onChange={file}/></label></div>
+   {msg&&<div className="text-sm text-amber-700">{msg}</div>}<div className="text-xs" style={{color:'var(--mut)'}}>الأسماء المطابقة لعميل موجود تُربط به (يُضاف الرقم الجديد فقط)، والبقية تُنشأ كعملاء جدد بلا عقود. يمكنك تغيير الربط لكل جهة.</div></div>
+  {items.length>0&&<><div className="flex gap-2"><select className="inp" value={sk[0]} onChange={e=>setSk([e.target.value,sk[1]])}><option value="name">ترتيب: الاسم</option><option value="st">ترتيب: المطابقة</option></select><button className="btn" style={{background:'#475569',minWidth:52,padding:0}} onClick={()=>setSk([sk[0],-sk[1]])}>{sk[1]<0?'↓':'↑'}</button></div>
+   <div className="flex justify-between text-sm"><span>{chosen.length} من {items.length} محدد</span><span><button className="underline" onClick={()=>setItems(a=>a.map(x=>({...x,on:true})))}>الكل</button> · <button className="underline" onClick={()=>setItems(a=>a.map(x=>({...x,on:false})))}>لا شيء</button></span></div>
+   {sorted.map(x=><div key={x.i} className="card p-3 space-y-1" style={{opacity:x.on?1:.55}}><label className="flex items-center gap-2"><input type="checkbox" checked={x.on} onChange={e=>set(x.i,{on:e.target.checked})}/><b className="flex-1">{x.name}</b><span className="text-xs px-2 rounded-full text-white" style={{background:x.to?'#2563eb':'#0f7a3a'}}>{x.to?'مطابق':'جديد'}</span></label><div className="text-xs mono" style={{color:'var(--mut)'}}>{x.tel.join(' · ')||'بدون رقم'}</div>
+    <select className="inp" value={x.to} onChange={e=>set(x.i,{to:+e.target.value})}><option value={0}>➕ إنشاء عميل جديد</option>{sc.map(c=><option key={c.id} value={c.id}>ربط بـ: {c.name}</option>)}</select></div>)}
+   <button disabled={!chosen.length} className="btn w-full" style={{background:chosen.length?'#0f7a3a':'#94a3b8'}} onClick={apply}>حفظ المحدد ({chosen.length})</button></>}</div></Sheet>}
+function SecuritySheet({data,close,say,open,takeSnap,restore}){
+ const rd=k=>{try{return localStorage.getItem(k)}catch(e){return null}};
+ const [snaps,setSnaps]=useState(null);const [iss,setIss]=useState(null);const [pinOn,setPinOn]=useState(()=>!!rd('pess_pin'));const [lm,setLm]=useState(()=>rd('pess_lockmin')||'0');
+ const loadSnaps=async()=>{const ks=((await idb2('keys'))||[]).filter(k=>String(k).startsWith('snap:')).sort().reverse();const r=[];for(const k of ks){const v=await idb2('get',k);if(v)r.push({id:k,...v})}setSnaps(r)};
+ useEffect(()=>{loadSnaps()},[]);
+ const setPin=async()=>{const a=prompt('أدخل رمزاً جديداً (4 إلى 6 أرقام)');if(!a)return;if(!/^\d{4,6}$/.test(a)){alert('الرمز يجب أن يكون 4 إلى 6 أرقام');return}const b=prompt('أعد إدخال الرمز للتأكيد');if(a!==b){alert('الرمزان غير متطابقين');return}
+  try{const sl=b64(crypto.getRandomValues(new Uint8Array(8)));localStorage.setItem('pess_pin',JSON.stringify({s:sl,h:await sha(sl+a),n:a.length}));setPinOn(true);say('تم تفعيل القفل ✓')}catch(e){alert('تعذّر حفظ الرمز')}};
+ const offPin=async()=>{const a=prompt('أدخل الرمز الحالي لإلغاء القفل');if(!a)return;try{const c=JSON.parse(localStorage.getItem('pess_pin'));if((await sha(c.s+a))===c.h){localStorage.removeItem('pess_pin');setPinOn(false);say('تم إلغاء القفل')}else alert('رمز خاطئ')}catch(e){}};
+ const setLock=v=>{setLm(v);try{localStorage.setItem('pess_lockmin',v)}catch(e){}};
+ const encExp=async()=>{const a=prompt('كلمة مرور للتشفير (6 أحرف على الأقل). احفظها جيداً — لا يمكن استرجاع النسخة بدونها');if(!a)return;if(a.length<6){alert('كلمة المرور قصيرة');return}const b=prompt('أعد إدخال كلمة المرور');if(a!==b){alert('الكلمتان غير متطابقتين');return}
+  try{dlBlob('PESS-Backup-'+today()+'.enc.json',new Blob([JSON.stringify(await encJson(toOrig(data),a))],{type:'application/json'}));say('تم تصدير نسخة مشفّرة ✓')}catch(x){say('تعذّر التشفير في هذا المتصفح')}};
+ const plain=()=>dlBlob('PESS-Backup-'+today()+'.json',new Blob([JSON.stringify(toOrig(data),null,1)],{type:'application/json'}));
+ const ic={err:'🔴',warn:'🟠',info:'🔵'};
+ return <Sheet title="مركز الأمان والحماية" onClose={close}><div className="space-y-3">
+  <div className="card p-3 space-y-2"><b>🔒 قفل التطبيق</b><div className="text-sm">{pinOn?'✅ مفعّل':'غير مفعّل'}</div>
+   <div className="flex gap-2 flex-wrap"><button className="btn" onClick={setPin}>{pinOn?'تغيير الرمز':'تفعيل رمز الدخول'}</button>{pinOn&&<button className="btn" style={{background:'#b91c1c'}} onClick={offPin}>إلغاء القفل</button>}</div>
+   {pinOn&&<L t="القفل التلقائي"><select className="inp" value={lm} onChange={e=>setLock(e.target.value)}><option value="0">فور مغادرة التطبيق</option><option value="1">بعد دقيقة</option><option value="5">بعد 5 دقائق</option><option value="15">بعد 15 دقيقة</option></select></L>}
+   <div className="text-xs" style={{color:'var(--mut)'}}>القفل يمنع الاطلاع العرضي على التطبيق ولا يشفّر بيانات المتصفح؛ للحماية الحقيقية استخدم النسخة المشفّرة. تنبيه: إن نسيت الرمز فالحل الوحيد مسح بيانات الموقع ثم الاستعادة من نسخة احتياطية — احتفظ بنسخة دائماً.</div></div>
+  <div className="card p-3 space-y-2"><b>💾 النسخ الاحتياطي</b><div className="flex gap-2 flex-wrap"><button className="btn" style={{background:'#0f7a3a'}} onClick={encExp}>🔐 نسخة مشفّرة (AES-256)</button><button className="btn" style={{background:'#475569'}} onClick={plain}>نسخة عادية JSON</button></div><div className="text-xs" style={{color:'var(--mut)'}}>الاستيراد من «المزيد ← استيراد نسخة JSON» يدعم الاثنتين، ويطلب كلمة المرور للمشفّرة.</div></div>
+  <div className="card p-3 space-y-2"><div className="flex justify-between items-center"><b>🕘 نقاط الاستعادة</b><button className="btn" onClick={async()=>{await takeSnap('يدوي',true);loadSnaps();say('تم إنشاء نقطة استعادة ✓')}}>＋ إنشاء الآن</button></div>
+   {snaps===null&&<div className="text-sm">جارٍ التحميل…</div>}{snaps&&!snaps.length&&<div className="text-sm">لا توجد نقاط بعد — تُنشأ تلقائياً عند الفتح (كل 6 ساعات)، وقبل الاستيراد والاستعادة، وقبل حفظ تعديلات العملاء.</div>}
+   {snaps&&snaps.map(x=><div key={x.id} className="p-2 rounded-lg text-sm space-y-1" style={{background:'var(--bg)'}}><div className="flex justify-between"><b>{new Date(x.t).toLocaleString('ar',{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit'})}</b><span style={{color:'var(--mut)'}}>{x.why}</span></div><div className="text-xs" style={{color:'var(--mut)'}}>{x.c} عميل · {x.n} عقد · {Math.round(x.j.length/1024)}KB</div>
+    <div className="flex gap-2"><button className="px-3 py-1 rounded-lg text-white" style={{background:'#2563eb'}} onClick={()=>{if(confirm('استعادة هذه النسخة؟ ستُحفظ نقطة للحالة الحالية أولاً.'))restore(x).then(loadSnaps)}}>استعادة</button><button className="px-3 py-1 rounded-lg" style={{background:'var(--card)'}} onClick={async()=>{await idb2('del',x.id);loadSnaps()}}>حذف</button></div></div>)}</div>
+  <div className="card p-3 space-y-2"><div className="flex justify-between items-center"><b>🩺 فحص سلامة البيانات</b><button className="btn" onClick={()=>setIss(checkData(data))}>فحص الآن</button></div>
+   {iss&&<><div className="text-sm">{iss.filter(x=>x.l==='err').length} خطأ · {iss.filter(x=>x.l==='warn').length} تنبيه · {iss.filter(x=>x.l==='info').length} ملاحظة{!iss.length&&' — البيانات سليمة ✅'}</div>{iss.slice(0,120).map((x,i)=><div key={i} className="text-sm p-2 rounded-lg" style={{background:'var(--bg)'}} onClick={()=>x.c&&open(x.c)}>{ic[x.l]} {x.m}</div>)}</>}</div></div></Sheet>}
+function SchemaSheet({data,mut,close}){return <Sheet title="إعدادات قاعدة البيانات" onClose={close}><div className="space-y-3">
+ <p className="text-xs" style={{color:'var(--mut)'}}>أضف حقولاً مخصصة لأي جدول، وعدّل القوائم. التغييرات تظهر فوراً في كل النماذج والنسخ الاحتياطي والتصدير.</p>
+ <FieldEd title="حقول العميل" e="c" data={data} mut={mut}/><FieldEd title="حقول العقد" e="k" data={data} mut={mut}/><FieldEd title="حقول الدفعة" e="p" data={data} mut={mut}/>
+ <ListEd title="أنواع العقود" kn="types" data={data} mut={mut}/><ListEd title="طرق الدفع" kn="methods" data={data} mut={mut}/><ListEd title="نتائج المكالمات" kn="res" data={data} mut={mut}/><ListEd title="تصنيف الهواتف" kn="phl" data={data} mut={mut}/></div></Sheet>}
+const IC={home:<><path d="M3 11l9-8 9 8"/><path d="M5 10v10h5v-6h4v6h5V10"/></>,cl:<><circle cx="9" cy="8" r="3.5"/><path d="M2 20c0-3.5 3-6 7-6s7 2.5 7 6"/><circle cx="17" cy="9" r="2.5"/><path d="M17 14c3 0 5 2 5 5"/></>,pm:<><rect x="2" y="6" width="20" height="13" rx="2"/><path d="M2 10h20"/><circle cx="12" cy="14.5" r="2"/></>,rp:<path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/>,more:<><circle cx="5" cy="12" r="1.6" fill="currentColor"/><circle cx="12" cy="12" r="1.6" fill="currentColor"/><circle cx="19" cy="12" r="1.6" fill="currentColor"/></>};
+const Ic=({n})=><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">{IC[n]}</svg>;
+function ClientSheet({c,mut,close,say,co,sch,onStmt,pad}){
+ const Xf=(lv,k,p,f,v)=>mut(d=>{const cl=d.clients.find(x=>x.id===c.id);const o=lv==='c'?cl:lv==='k'?cl.contracts.find(y=>y.id===k.id):cl.contracts.find(y=>y.id===k.id).payments.find(z=>z.id===p.id);(o.x=o.x||{})[f.id]=v},'تعديل '+f.label+' — '+c.name+' ← '+String(v).slice(0,30),'x'+lv+c.id+(k?k.id:'')+(p?p.id:'')+f.id);
+ const [ok,setOk]=useState({});const [call,setCall]=useState({type:'اتصال',result:RES[0],note:''});
+ const C=(f,v)=>mut(d=>{d.clients.find(x=>x.id===c.id)[f]=v},'تعديل '+FL[f]+' — '+c.name+' ← '+String(v).slice(0,30),'c'+c.id+f);
+ const Kf=(k,f,v)=>mut(d=>{d.clients.find(x=>x.id===c.id).contracts.find(y=>y.id===k.id)[f]=v},'تعديل '+FL[f]+' عقد #'+k.id+' — '+c.name+' ← '+String(v).slice(0,30),'k'+k.id+f);
+ const Pf=(k,p,f,v)=>mut(d=>{d.clients.find(x=>x.id===c.id).contracts.find(y=>y.id===k.id).payments.find(z=>z.id===p.id)[f]=v},'تعديل '+FL[f]+' دفعة '+p.id+' عقد #'+k.id+' — '+c.name+' ← '+String(v).slice(0,30),'p'+k.id+'_'+p.id+f);
+ const t=tot(c);
+ return <Sheet title={c.name} onClose={close} pad={pad}>
+  <div className="card p-3 mb-3 grid grid-cols-2 gap-2 text-sm"><div>الصافي<b className="block mono">{fmt(t.t)}</b></div><div>المدفوع<b className="block mono">{fmt(t.p)}</b></div><div>المتبقي<b className="block mono text-red-700">{fmt(t.r)}</b></div><div>الربح<b className="block mono">{fmt(t.pr)}</b></div></div>
+  {num(c.credit)>0&&t.r>num(c.credit)&&<div className="p-2 mb-2 rounded-lg bg-red-100 text-red-800 text-sm">⚠ تجاوز الحد الائتماني</div>}
+  <div className="card p-3 mb-3 space-y-2"><L t="اسم العميل"><input className="inp" value={c.name} onChange={e=>C('name',e.target.value)}/></L><L t="الحد الائتماني"><NumIn v={c.credit} on={v=>C('credit',v)}/></L><Ext S={sch.c} o={c} on={(f,v)=>Xf('c',null,null,f,v)}/>
+   {c.phones.map((p,i)=><div key={i} className="flex gap-1 items-center"><input className="inp mono" inputMode="tel" value={p.n} onChange={e=>mut(d=>{d.clients.find(x=>x.id===c.id).phones[i].n=e.target.value},'تعديل هاتف — '+c.name,'ph'+c.id+i)}/><select className="inp" style={{width:96,flex:'none'}} value={p.l} onChange={e=>mut(d=>{d.clients.find(x=>x.id===c.id).phones[i].l=e.target.value},'تصنيف هاتف — '+c.name)}>{[...new Set([p.l,...PHL])].map(v=><option key={v}>{v}</option>)}</select><a className="btn flex items-center" style={{background:'#0f7a3a'}} href={'tel:'+p.n}>📞</a><a className="btn flex items-center" style={{background:'#128c7e'}} target="_blank" href={wa(p.n)}>💬</a><button className="px-2" onClick={()=>mut(d=>{d.clients.find(x=>x.id===c.id).phones.splice(i,1)},'حذف هاتف — '+c.name)}>🗑</button></div>)}
+   <button className="text-blue-600 font-bold" onClick={()=>mut(d=>{d.clients.find(x=>x.id===c.id).phones.push({n:'',l:'رئيسي'})},'إضافة هاتف — '+c.name)}>+ رقم هاتف</button></div>
+  {c.contracts.map(k=>{const x=cc(k);const o=ok[k.id];return <div key={k.id} className="card p-3 mb-2" style={{borderRight:'5px solid '+COL[x.st]}}>
+   <div className="flex justify-between items-center" onClick={()=>setOk(s=>({...s,[k.id]:!o}))}><div><b>{k.items||'عقد #'+k.id}</b><div className="text-xs" style={{color:'var(--mut)'}}>#{k.id} · {k.type}</div></div><div className="text-left"><Chip s={x.st}/><div className="text-sm mono mt-1">باقي {fmt(Math.max(x.rem,0))}</div></div></div>
+   <div className="h-1.5 rounded bg-slate-200 mt-2"><div className="h-1.5 rounded" style={{width:Math.min(100,x.pct)+'%',background:COL[x.st]}}/></div>
+   {o&&<div className="mt-3 space-y-2">
+    <L t="المواد"><input className="inp" value={k.items} onChange={e=>Kf(k,'items',e.target.value)}/></L><L t="العميل الفرعي"><input className="inp" value={k.sub||''} onChange={e=>Kf(k,'sub',e.target.value)}/></L>
+    <div className="grid grid-cols-2 gap-2"><L t="النوع"><select className="inp" value={k.type} onChange={e=>Kf(k,'type',e.target.value)}>{TYPES.map(t=><option key={t}>{t}</option>)}</select></L><L t="الأشهر"><NumIn v={k.months} on={v=>Kf(k,'months',v)}/></L>
+     <L t="الإجمالي"><NumIn v={k.total} on={v=>Kf(k,'total',v)}/></L><L t="المقدمة"><NumIn v={k.down} on={v=>Kf(k,'down',v)}/></L><L t="الخصم"><NumIn v={k.discount} on={v=>Kf(k,'discount',v)}/></L><L t="التكلفة"><NumIn v={k.cost} on={v=>Kf(k,'cost',v)}/></L></div>
+    <L t="التاريخ"><input type="date" className="inp" value={k.date} onChange={e=>Kf(k,'date',e.target.value)}/></L><Ext S={sch.k} o={k} on={(f,v)=>Xf('k',k,null,f,v)}/>
+    <div className="text-sm">الربح الحقيقي: <b className="mono">{fmt(x.profit)}</b> · الهامش <b>{mg(k,x).toFixed(1)}%</b></div>
+    <b className="text-sm">الدفعات ({k.payments.length})</b>
+    {k.payments.map(p=><div key={p.id} className="p-2 rounded-lg" style={{background:'var(--bg)'}}><div className="grid grid-cols-2 gap-2"><NumIn v={p.amount} on={v=>Pf(k,p,'amount',v)}/><input type="date" className="inp" value={p.date} onChange={e=>Pf(k,p,'date',e.target.value)}/><select className="inp" value={p.method} onChange={e=>Pf(k,p,'method',e.target.value)}>{METHODS.map(m=><option key={m}>{m}</option>)}</select><input className="inp" placeholder="مرجع" value={p.ref} onChange={e=>Pf(k,p,'ref',e.target.value)}/></div>
+     <div className="mt-1"><Ext S={sch.p} o={p} on={(f,v)=>Xf('p',k,p,f,v)}/></div><div className="flex gap-2 mt-1"><input className="inp" placeholder="ملاحظة" value={p.note} onChange={e=>Pf(k,p,'note',e.target.value)}/><button onClick={()=>mut(d=>{const kk=d.clients.find(y=>y.id===c.id).contracts.find(y=>y.id===k.id);kk.payments=kk.payments.filter(z=>z.id!==p.id).map((z,i)=>({...z,id:i+1}))},'حذف دفعة')}>🗑</button></div></div>)}
+    <button className="text-green-700 font-bold" onClick={()=>mut(d=>{const kk=d.clients.find(y=>y.id===c.id).contracts.find(y=>y.id===k.id);kk.payments.push({id:nid(kk.payments),amount:0,date:today(),method:'نقداً',ref:'',note:''})},'سطر دفعة جديد عقد #'+k.id+' — '+c.name)}>+ سطر دفعة</button>
+    <div><button className="text-red-700 font-bold" onClick={()=>{if(!confirm('حذف العقد؟'+(c.contracts.length===1?' (آخر عقد، سيُحذف العميل)':'')))return;mut(d=>{const cl=d.clients.find(y=>y.id===c.id);cl.contracts=cl.contracts.filter(y=>y.id!==k.id);if(!cl.contracts.length)d.clients=d.clients.filter(y=>y.id!==c.id)},'حذف عقد '+k.id);if(c.contracts.length===1)history.back()}}>حذف العقد</button></div></div>}</div>})}
+  <button className="text-blue-600 font-bold mb-3" onClick={()=>mut(d=>{const all=d.clients.flatMap(x=>x.contracts);d.clients.find(y=>y.id===c.id).contracts.push({id:nid(all),items:'',type:'تقسيط',months:0,total:0,down:0,discount:0,cost:0,date:today(),sub:'',note:'',payments:[]})},'عقد جديد — '+c.name)}>+ إضافة عقد</button>
+  <div className="card p-3 mb-3 space-y-2"><b>سجل المكالمات</b><div className="grid grid-cols-2 gap-2"><select className="inp" value={call.type} onChange={e=>setCall({...call,type:e.target.value})}>{['اتصال','واتساب','زيارة'].map(x=><option key={x}>{x}</option>)}</select><select className="inp" value={call.result} onChange={e=>setCall({...call,result:e.target.value})}>{RES.map(x=><option key={x}>{x}</option>)}</select></div>
+   <input className="inp" placeholder="ملاحظة" value={call.note} onChange={e=>setCall({...call,note:e.target.value})}/><button className="btn w-full" onClick={()=>{mut(d=>{d.clients.find(y=>y.id===c.id).calls.unshift({date:ld(new Date())+' '+pad2(new Date().getHours())+':'+pad2(new Date().getMinutes()),...call})},'مكالمة');setCall({...call,note:''});say('أُضيفت المكالمة — اضغط «حفظ» لتأكيدها')}}>تسجيل</button>
+   {c.calls.map((x,i)=><div key={i} className="text-xs border-t pt-1" style={{borderColor:'var(--bd)'}}>{x.date} · {x.type} · {x.result} {x.note&&'· '+x.note}</div>)}</div>
+  <div className="flex gap-2"><button className="btn flex-1" onClick={onStmt}>📄 كشف الحساب</button><button className="btn" style={{background:'#b91c1c'}} onClick={()=>{if(confirm('حذف العميل وكل عقوده؟')){mut(d=>{d.clients=d.clients.filter(y=>y.id!==c.id)},'حذف عميل '+c.name);history.back()}}}>حذف</button></div>
+ </Sheet>}
+
+function PaySheet({data,cid,mut,close,say}){
+ const [ps,setPs]=useUi('pyc',['rem',-1]);const wr=sortBy(data.clients.filter(c=>tot(c).r>0),c=>ps[0]==='name'?c.name:tot(c).r,ps[1]);const [ci,setCi]=useState(wr.find(c=>c.id===cid)?cid:wr[0]?.id);const [kid,setKid]=useState('auto');
+ const [f,setF]=useState({amt:0,date:today(),m:'نقداً',ref:'',note:''});const c=data.clients.find(x=>x.id==ci);const ks=c?c.contracts.filter(k=>cc(k).rem>0):[];
+ const sel=kid==='auto'?null:ks.find(k=>k.id==kid);const rem=r2(sel?cc(sel).rem:ks.reduce((s,k)=>s+cc(k).rem,0));
+ let left=f.amt;const al=[];(sel?[sel]:[...ks].sort((a,b)=>(a.date||'').localeCompare(b.date||'')||a.id-b.id)).forEach(k=>{const v=r2(Math.min(left,cc(k).rem));if(v>0){al.push({k,v});left=r2(left-v)}});
+ const bad=f.amt<=0||f.amt>rem+0.001;
+ if(!wr.length)return <Sheet title="تسجيل دفعة" onClose={close}><p>لا يوجد عملاء لديهم متبقي 🎉</p></Sheet>;
+ return <Sheet title="تسجيل دفعة" onClose={close}><div className="space-y-3">
+  <SortBar o={[['rem','المتبقي'],['name','الاسم']]} v={ps} on={setPs}/><L t="العميل (لديه متبقي فقط)"><select className="inp" value={ci} onChange={e=>{setCi(+e.target.value);setKid('auto')}}>{wr.map(x=><option key={x.id} value={x.id}>{x.name} — {fmt(tot(x).r)}</option>)}</select></L>
+  <L t="العقد"><select className="inp" value={kid} onChange={e=>setKid(e.target.value)}><option value="auto">توزيع تلقائي (الأقدم أولاً)</option>{ks.map(k=><option key={k.id} value={k.id}>#{k.id} {k.items.slice(0,30)} — {fmt(cc(k).rem)}</option>)}</select></L>
+  <L t={'المبلغ (الحد الأقصى '+fmt(rem)+')'}><NumIn v={f.amt} on={v=>setF({...f,amt:v})}/></L>
+  <div className="grid grid-cols-2 gap-2"><input type="date" className="inp" value={f.date} onChange={e=>setF({...f,date:e.target.value})}/><select className="inp" value={f.m} onChange={e=>setF({...f,m:e.target.value})}>{METHODS.map(m=><option key={m}>{m}</option>)}</select><input className="inp" placeholder="مرجع" value={f.ref} onChange={e=>setF({...f,ref:e.target.value})}/><input className="inp" placeholder="ملاحظة" value={f.note} onChange={e=>setF({...f,note:e.target.value})}/></div>
+  {f.amt>rem+0.001&&<div className="text-red-700 text-sm">المبلغ يتجاوز المتبقي</div>}
+  {al.length>0&&<div className="card p-2 text-sm">{al.map(a=><div key={a.k.id} className="flex justify-between"><span>#{a.k.id} {a.k.items.slice(0,24)}</span><b className="mono">{fmt(a.v)}</b></div>)}<div className="text-xs mt-1" style={{color:'var(--mut)'}}>المتبقي بعد الدفع: {fmt(rem-f.amt)}</div></div>}
+  <button disabled={bad} className="btn w-full" style={{background:bad?'#94a3b8':'#0f7a3a'}} onClick={()=>{mut(d=>{al.forEach(({k,v})=>{const kk=d.clients.find(x=>x.id==ci).contracts.find(y=>y.id===k.id);kk.payments.push({id:nid(kk.payments),amount:v,date:f.date,method:f.m,ref:f.ref,note:f.note})})},'دفعة '+fmt(f.amt)+' — '+c.name);say('تم حفظ الدفعة ✓');history.back()}}>حفظ الدفعة</button></div></Sheet>}
+
+function NewClient({data,mut,close,say,open}){
+ const [f,setF]=useState({name:'',items:'',type:'تقسيط',total:0,down:0,discount:0,cost:0,months:0,date:today()});const S=(k,v)=>setF({...f,[k]:v});const [xv,setXv]=useState({});
+ const dup=data.clients.some(c=>c.name.trim()===f.name.trim());const ok=f.name.trim()&&!dup&&f.total>0;const rem=f.total-f.discount-f.down;
+ return <Sheet title="عميل جديد" onClose={close}><div className="space-y-2">
+  <L t="اسم العميل"><input className="inp" value={f.name} onChange={e=>S('name',e.target.value)}/></L>{dup&&<div className="text-red-700 text-sm">الاسم موجود مسبقاً</div>}<Ext S={(data.schema||{}).c} o={{x:xv}} on={(fd,v)=>setXv({...xv,[fd.id]:v})}/>
+  <L t="المواد"><input className="inp" value={f.items} onChange={e=>S('items',e.target.value)}/></L><L t="التاريخ"><input type="date" className="inp" value={f.date} onChange={e=>S('date',e.target.value)}/></L>
+  <div className="grid grid-cols-2 gap-2"><L t="النوع"><select className="inp" value={f.type} onChange={e=>S('type',e.target.value)}>{TYPES.map(t=><option key={t}>{t}</option>)}</select></L><L t="الأشهر"><NumIn v={f.months} on={v=>S('months',v)}/></L><L t="الإجمالي"><NumIn v={f.total} on={v=>S('total',v)}/></L><L t="المقدمة"><NumIn v={f.down} on={v=>S('down',v)}/></L><L t="الخصم"><NumIn v={f.discount} on={v=>S('discount',v)}/></L><L t="التكلفة"><NumIn v={f.cost} on={v=>S('cost',v)}/></L></div>
+  <div className="card p-2 text-sm flex justify-between"><span>الباقي <b className="mono">{fmt(rem)}</b></span><span>الربح <b className="mono">{fmt(f.total-f.cost-f.discount)}</b></span></div>
+  <button disabled={!ok} className="btn w-full" style={{background:ok?'#0f7a3a':'#94a3b8'}} onClick={()=>{const id=nid(data.clients),kid=nid(data.clients.flatMap(x=>x.contracts));mut(d=>{d.clients.push({id,name:f.name.trim(),x:xv,phones:[],credit:0,calls:[],contracts:[{id:kid,items:f.items,type:f.type,months:f.months,total:f.total,down:f.down,discount:f.discount,cost:f.cost,date:f.date,sub:'',note:'',payments:[]}]})},'عميل جديد: '+f.name);say('تمت الإضافة ✓');history.back();setTimeout(()=>open(id),50)}}>حفظ</button></div></Sheet>}
+
+function App(){
+ const [data,setData]=useState(load);const [tab,setTab]=useUi('tab','home');const [q,setQ]=useState('');const [dq,setDq]=useState('');const [flt,setFlt]=useUi('clf','all');const [cs,setCs]=useUi('cls',['rem',-1]);
+ const [sh,setSh]=useState(null);const [saved,setSaved]=useState(Date.now());const [dirty,setDirty]=useState(false);const [toast,setToast]=useState('');
+ const [st,setSt]=useState('ok');const [sync,setSync]=useState('local');const [exitQ,setExitQ]=useState(false);const [bye,setBye]=useState(false);const [persist,setPersist]=useState('؟');
+ const [slog,setSlog]=useState(()=>{try{return JSON.parse(localStorage.getItem(K+'_log'))||[]}catch(e){return []}});
+ const ref=useRef(data),last=useRef(''),logR=useRef(slog),first=useRef(true),errR=useRef(''),apiR=useRef(false),syncR=useRef('local'),revR=useRef(0),tokR=useRef(''),pushT=useRef(0);ref.current=data;
+ const say=m=>{setToast(m);setTimeout(()=>setToast(''),2200)};
+ const [locked,setLocked]=useState(()=>{try{return !!localStorage.getItem('pess_pin')}catch(e){return false}});const hid=useRef(0),snapT=useRef(0);
+ const lockCheck=()=>{try{if(localStorage.getItem('pess_pin')){const m=+localStorage.getItem('pess_lockmin')||0;if(Date.now()-hid.current>=m*60000)setLocked(true)}}catch(e){}};
+ const takeSnap=async(why,force)=>{const t=Date.now();if(!force&&t-snapT.current<30*60*1000)return;snapT.current=t;const d=ref.current;try{await idb2('put','snap:'+t,{t,why,c:d.clients.length,n:d.clients.reduce((n,c)=>n+c.contracts.length,0),j:JSON.stringify(d)});const ks=((await idb2('keys'))||[]).filter(k=>String(k).startsWith('snap:')).sort();for(const k of ks.slice(0,-15))await idb2('del',k)}catch(e){}};
+ const restoreSnap=async x=>{await takeSnap('قبل الاستعادة',true);try{setData(migrate(JSON.parse(x.j)));say('تمت الاستعادة ✓')}catch(e){say('تعذّرت الاستعادة')}};
+ useEffect(()=>{const t=setTimeout(async()=>{const l=((await idb2('keys'))||[]).filter(k=>String(k).startsWith('snap:')).sort().pop();if(!l||Date.now()-(+String(l).slice(5))>6*3600e3)takeSnap('تلقائي عند الفتح')},4000);return()=>clearTimeout(t)},[]);
+ const save=why=>{try{const body=JSON.stringify(ref.current),changed=body!==last.current;if(!changed&&why!=='force')return true;
+  const t=Date.now(),payload=JSON.stringify({...ref.current,_t:t});let lsOk=true;try{localStorage.setItem(K,payload)}catch(e){lsOk=false;errR.current='localStorage: '+e.name+' — '+e.message}idb('put',payload).then(r=>{if(!lsOk){setSt(r?'idb':'err');if(!r)errR.current+=' | IndexedDB: غير متاح'}});last.current=body;
+  logR.current=[{t,why:why||'تلقائي',kb:Math.round(payload.length/1024)}].concat(logR.current).slice(0,50);try{localStorage.setItem(K+'_log',JSON.stringify(logR.current))}catch(e){}
+  setSlog(logR.current);setSaved(t);setDirty(false);if(lsOk)setSt('ok');if(apiR.current){try{localStorage.setItem('pess_pend','1')}catch(e){}clearTimeout(pushT.current);pushT.current=setTimeout(()=>doPush(),400)}return lsOk}catch(e){errR.current=String(e);setSt('err');return false}};
+ useEffect(()=>{if(first.current){first.current=false;return}save('تغيير')},[data]);
+ useEffect(()=>{window.__bye=false;try{navigator.storage&&navigator.storage.persist&&navigator.storage.persist().then(p=>setPersist(p?'مفعّل':'غير مفعّل')).catch(()=>{})}catch(e){}
+  try{tokR.current=localStorage.getItem('pess_tok')||'';revR.current=+localStorage.getItem('pess_rev')||0}catch(e){}
+  fetch('/api/health').then(r=>r.json()).then(j=>{if(j&&j.pess){apiR.current=true;let pend=false;try{pend=localStorage.getItem('pess_pend')==='1'}catch(e){}if(pend)doPush();else pull(true)}}).catch(()=>{});
+  const rt=setInterval(()=>{if(apiR.current&&syncR.current==='off')doPush()},5000);
+  idb('get').then(s=>{let ad=false;try{const p=JSON.parse(s);if(p&&Array.isArray(p.clients)&&(p._t||0)>(ref.current._t||0)){ad=true;setData(migrate(p))}}catch(e){}if(!ad)save('بدء')});
+  const a=setInterval(()=>save(),1000),b=setInterval(()=>{try{localStorage.setItem(KB,JSON.stringify({...ref.current,_t:Date.now()}))}catch(e){}},10000);
+  const h=e=>{if(!save('إغلاق')){e.preventDefault();e.returnValue=''}},v=()=>{if(document.visibilityState==='hidden'){save('إخفاء التطبيق');hid.current=Date.now();if(apiR.current)doPush()}else lockCheck()},bl=()=>save('فقد التركيز');
+  window.addEventListener('beforeunload',h);window.addEventListener('pagehide',()=>save('pagehide'));window.addEventListener('blur',bl);document.addEventListener('visibilitychange',v);
+  try{history.pushState({g:1},'')}catch(e){}
+  const pop=()=>{if(window.__sh>0||window.__bye)return;try{history.pushState({g:1},'')}catch(e){}setExitQ(true)};window.addEventListener('popstate',pop);
+  return()=>{clearInterval(a);clearInterval(b);clearInterval(rt);window.removeEventListener('popstate',pop)}},[]);
+ const doExit=()=>{save('force');window.__bye=true;setExitQ(false);setBye(true);setTimeout(()=>{try{window.close()}catch(e){}try{history.go(-(history.length-1))}catch(e){}},400)};
+ const setCo=(k,v)=>mut(d=>{d.company=d.company||{};d.company[k]=v},'تعديل بيانات الشركة: '+k,'co'+k);
+ const img=(e,k)=>{const f=e.target.files[0];if(!f)return;const r=new FileReader();r.onload=()=>{const im=new Image();im.onload=()=>{const z=Math.min(1,320/Math.max(im.width,im.height)),cv=document.createElement('canvas');cv.width=Math.round(im.width*z);cv.height=Math.round(im.height*z);cv.getContext('2d').drawImage(im,0,0,cv.width,cv.height);setCo(k,cv.toDataURL('image/png'));setCo(k+'Enabled',true)};im.src=r.result};r.readAsDataURL(f);e.target.value=''};
+ useEffect(()=>{const h=e=>{const t=e.target&&e.target.tagName;if(t==='INPUT'||t==='SELECT'||t==='TEXTAREA'||e.ctrlKey||e.metaKey||!e.key||e.key.length>1&&e.key!=='Escape')return;if(e.key==='Escape'){if(window.__sh>0)history.back()}else if(e.key==='n'||e.key==='ن'){setSh({t:'n'})}else if('12345'.includes(e.key)){setTab(['home','cl','pm','rp','more'][+e.key-1])}};window.addEventListener('keydown',h);return()=>window.removeEventListener('keydown',h)},[]);
+ const setSy=v=>{syncR.current=v;setSync(v)};
+ const H=()=>({'Content-Type':'application/json','x-token':tokR.current});
+ const askTok=()=>{const t=prompt('أدخل رمز الدخول إلى السيرفر');if(t){tokR.current=t;try{localStorage.setItem('pess_tok',t)}catch(e){}return true}return false};
+ const doPush=async force=>{if(!apiR.current)return;clearTimeout(pushT.current);try{setSy('busy');
+  const r=await fetch('/api/data',{method:'PUT',headers:H(),body:JSON.stringify({baseRev:force?-1:revR.current,data:ref.current})});
+  if(r.status===409){setSy('conflict');return}
+  if(r.status===401){if(askTok())return doPush(force);setSy('off');return}
+  const j=await r.json();if(!r.ok)throw 0;revR.current=j.rev;try{localStorage.setItem('pess_rev',String(j.rev));localStorage.removeItem('pess_pend')}catch(e){}setSy('ok')}catch(e){setSy('off')}};
+ const pull=async keepLocal=>{try{setSy('busy');const r=await fetch('/api/data',{headers:H()});if(r.status===401){if(askTok())return pull(keepLocal);setSy('off');return}
+  const j=await r.json();revR.current=j.rev;try{localStorage.setItem('pess_rev',String(j.rev));localStorage.removeItem('pess_pend')}catch(e){}
+  if(j.data&&j.data.clients&&j.data.clients.length){setData(migrate(j.data));setSy('ok')}else if(keepLocal)doPush(true);else setSy('ok')}catch(e){setSy('off')}};
+ const diag=()=>{let ls='يعمل ✅';try{localStorage.setItem('_p','1');localStorage.removeItem('_p')}catch(e){ls='محجوب ❌ ('+e.name+')'}
+  alert('تشخيص التخزين\nlocalStorage: '+ls+'\n'+(errR.current||'')+'\n\nالسبب الشائع: وضع التخفي، أو حظر ملفات تعريف الارتباط/بيانات الموقع لجهات خارجية في Chrome.\nالحل: افتح الرابط في تبويب عادي (غير تخفي)، ثم Chrome ⋮ ← الإعدادات ← إعدادات الموقع ← ملفات تعريف الارتباط ← اسمح، وعطّل حظر الجهات الخارجية. وحتى ذلك الحين اضغط «تحميل نسخة الآن» بعد كل عمل.')};
+ useEffect(()=>{const t=setTimeout(()=>setDq(q.trim()),250);return()=>clearTimeout(t)},[q]);
+ const mut=(fn,log,key)=>{setData(d=>{const n=structuredClone(d);fn(n);const t=new Date().toISOString(),au=n.audit||[];
+  if(Array.isArray(log))n.audit=log.map(a=>({t,a,k:a})).reverse().concat(au).slice(0,500);
+  else{const a=log||'تعديل',k=key||a;n.audit=((au[0]&&au[0].k===k&&Date.now()-Date.parse(au[0].t)<10000)?[{t,a,k}].concat(au.slice(1)):[{t,a,k}].concat(au)).slice(0,500)}
+  return n})};
+ const cl=data.clients,co=data.company||{};applyLists(data);
+ const match=c=>!dq||(c.name+' '+c.contracts.map(k=>k.id+' '+k.items+' '+(k.sub||'')).join(' ')).includes(dq);
+ const CLG={rem:c=>tot(c).r,name:c=>c.name,n:c=>c.contracts.length,profit:c=>tot(c).pr,pct:c=>{const t=tot(c);return t.t?t.p/t.t:0},last:c=>lastPay(c),st:c=>SEV[cst(c)]};
+ const shown=useMemo(()=>sortBy(cl.filter(match).filter(c=>{const t=tot(c);return flt==='all'||(flt==='rem'&&t.r>0)||(flt==='paid'&&t.r<=0&&c.contracts.length>0)||(flt==='nopay'&&c.contracts.length>0&&c.contracts.every(k=>cc(k).st==='بدون دفعات'))||(flt==='new'&&!c.contracts.length)}),CLG[cs[0]]||CLG.rem,cs[1]),[cl,dq,flt,cs]);
+ const all=cl.flatMap(c=>c.contracts.map(k=>({c,k,x:cc(k)}))),T=tot({contracts:cl.flatMap(c=>c.contracts)});
+ const byType=TYPES.map(t=>({t,n:all.filter(a=>a.k.type===t).length}));
+ const dl=(n,t,ty)=>{const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([t],{type:ty}));a.download=n;a.click()};
+ const csv=()=>{const SC=(data.schema||{}).c||[],SK=(data.schema||{}).k||[];dl('pess.csv','\uFEFFsep=,\n'+[['العميل','العقد','المواد','النوع','الصافي','المدفوع','الباقي','الربح','الحالة','العميل الفرعي','الهامش%'].concat(SC.map(f=>f.label),SK.map(f=>f.label))].concat(all.map(({c,k,x})=>[c.name,k.id,k.items,k.type,num(k.total)-num(k.discount),x.paid,x.rem,x.profit,x.st,k.sub||'',mg(k,x).toFixed(1)].concat(SC.map(f=>(c.x||{})[f.id]||''),SK.map(f=>(k.x||{})[f.id]||'')))).map(r=>r.map(v=>'"'+String(v).replace(/"/g,'""')+'"').join(',')).join('\n'),'text/csv')};
+ const imp=e=>{const f=e.target.files[0];e.target.value='';if(!f)return;const r=new FileReader();r.onload=async()=>{try{let o=JSON.parse(String(r.result).replace(/^\uFEFF/,''));
+  if(o&&o.pessEnc){const pw=prompt('النسخة مشفّرة — أدخل كلمة المرور');if(!pw)return;try{o=await decJson(o,pw)}catch(x){say('كلمة المرور خاطئة أو الملف تالف');return}}
+  const d=o.customers?fromOrig(o):o;if(!d||!Array.isArray(d.clients))throw 0;const m=migrate(d),errs=checkData(m).filter(x=>x.l==='err').length;
+  if(!confirm('استيراد '+m.clients.length+' عميل و'+m.clients.reduce((n,c)=>n+c.contracts.length,0)+' عقد؟\nسيتم استبدال البيانات الحالية (تُحفظ نقطة استعادة تلقائياً).'+(errs?'\n⚠ تنبيه: '+errs+' خطأ في الملف':'')))return;
+  await takeSnap('قبل الاستيراد',true);setData(m);say('تم الاستيراد ✓')}catch(x){say('ملف غير صالح')}};r.readAsText(f)};
+ const closeSh=p=>{setSh(null)};
+ const tabs=[['home','home','الرئيسية'],['cl','cl','العملاء'],['pm','pm','الدفعات'],['rp','rp','التقارير'],['more','more','المزيد']];
+if(locked)return <Lock onOk={()=>setLocked(false)}/>;
+ return <div className="max-w-xl mx-auto" style={{paddingBottom:120}}>
+  <header className="p-3 text-white sticky top-0 z-10" style={{background:'linear-gradient(135deg,#002244,#0f7a3a)'}}>
+   <div className="flex justify-between items-center"><b className="text-lg">{({home:co.name||'PESS',cl:'العملاء',pm:'الدفعات',rp:'التقارير',more:'المزيد'})[tab]}</b><span className="text-xs"><span onClick={diag}>{st==='err'?'🔴 فشل الحفظ (اضغط)':st==='idb'?'🟡 حفظ بديل (اضغط)':'🟢 تم الحفظ '+new Date(saved).toLocaleTimeString('ar',{hour:'2-digit',minute:'2-digit',second:'2-digit'})}</span>{sync!=='local'&&<span> {sync==='ok'?'☁✓':sync==='busy'?'☁…':sync==='off'?'☁✕ بلا اتصال':'⚠ تعارض'}</span>} <button className="bg-white/25 rounded px-2 py-1 mr-1" onClick={()=>{save('force');say('تم الحفظ ✓')}}>حفظ الآن</button></span></div>
+   {(tab==='cl'||tab==='pm'||tab==='rp')&&<input className="inp mt-2" placeholder="🔍 بحث: اسم / رقم عقد / مواد" value={q} onChange={e=>setQ(e.target.value)}/>}</header>
+  {sync==='conflict'&&<div className="p-3 text-sm text-white" style={{background:'#b91c1c'}}>⚠ تم تعديل البيانات على جهاز آخر. <button className="underline font-bold" onClick={()=>pull(false)}>تحميل بيانات السيرفر</button> · <button className="underline" onClick={()=>{if(confirm('استبدال بيانات السيرفر بنسختك؟'))doPush(true)}}>استبدال السيرفر بنسختي</button></div>}
+  {st!=='ok'&&<div className="p-3 text-sm text-white" style={{background:st==='err'?'#b91c1c':'#b45309'}}>{st==='err'?'⚠ المتصفح يمنع التخزين: بياناتك لن تبقى بعد الإغلاق.':'⚠ التخزين الأساسي محجوب، يعمل التخزين البديل فقط.'} <button className="underline font-bold" onClick={()=>dl('PESS-Backup-'+today()+'.json',JSON.stringify(toOrig(data),null,1),'application/json')}>تحميل نسخة الآن</button> · <button className="underline" onClick={diag}>التفاصيل</button></div>}
+  {tab==='home'&&<div className="p-3 grid grid-cols-2 gap-2"><Kpi l="العملاء" v={cl.length} c="#002244"/><Kpi l="العقود" v={all.length} c="#002244"/><Kpi l="إجمالي المبيعات" v={fmt(T.t)} c="#2563eb"/><Kpi l="المحصّل" v={fmt(T.p)} c="#0f7a3a"/><Kpi l="المتبقي" v={fmt(T.r)} c="#b91c1c"/><Kpi l="الربح الحقيقي" v={fmt(T.pr)} c="#f59e0b"/><Kpi l="عقود بلا دفعات" v={all.filter(a=>a.x.st==='بدون دفعات').length} c="#64748b"/><Kpi l="عملاء مسددون" v={cl.filter(c=>c.contracts.length>0&&tot(c).r<=0).length} c="#0f7a3a"/><Kpi l="ربح محصّل" v={fmt(T.rp)} c="#0f7a3a"/><Kpi l="ربح غير محصّل" v={fmt(T.pr-T.rp)} c="#b45309"/>
+   <div className="card p-3 col-span-2"><b>نسبة التحصيل {T.t?(T.p/T.t*100).toFixed(0):0}% · هامش الربح {T.t?(T.pr/T.t*100).toFixed(0):0}%</b><div className="h-2 rounded bg-slate-200 mt-1"><div className="h-2 rounded" style={{width:Math.min(100,T.t?T.p/T.t*100:0)+'%',background:'#0f7a3a'}}/></div></div>
+   <div className="card p-3 col-span-2"><b>أفضل 8 عملاء (بالمتبقي)</b>{[...cl].sort((a,b)=>tot(b).r-tot(a).r).slice(0,8).map(c=><div key={c.id} onClick={()=>setSh({t:'c',id:c.id})} className="flex justify-between py-2 border-b text-sm" style={{borderColor:'var(--bd)'}}><span>{c.name}</span><b className="mono">{fmt(tot(c).r)}</b></div>)}</div>
+   <div className="card p-3 col-span-2"><b>توزيع الأنواع</b>{byType.map(b=><div key={b.t} className="flex items-center gap-2 text-sm mt-1"><span className="w-24">{b.t}</span><div className="flex-1 h-3 rounded bg-slate-200"><div className="h-3 rounded" style={{width:(all.length?b.n/all.length*100:0)+'%',background:'#002244'}}/></div><span className="mono">{b.n}</span></div>)}</div></div>}
+  {tab==='cl'&&<div className="p-3 space-y-2"><div className="flex gap-1 overflow-x-auto">{[['all','الكل'],['rem','لديه متبقي'],['paid','مسدد'],['nopay','بدون دفعات'],['new','بدون عقود']].map(([k,l])=><button key={k} onClick={()=>setFlt(k)} className="px-3 py-2 rounded-full text-sm whitespace-nowrap" style={{background:flt===k?'#002244':'var(--card)',color:flt===k?'#fff':'var(--tx)'}}>{l}</button>)}</div>
+   <SortBar o={[['rem','المتبقي'],['name','الاسم'],['n','عدد العقود'],['profit','الربح'],['pct','نسبة التحصيل'],['last','آخر دفعة'],['st','الحالة (الأخطر)']]} v={cs} on={setCs}/><div className="flex justify-between items-center text-xs" style={{color:'var(--mut)'}}><span>{shown.length} عميل · {shown.reduce((n,c)=>n+c.contracts.length,0)} عقد · المتبقي {fmt(shown.reduce((s,c)=>s+tot(c).r,0))}</span><button className="underline text-blue-600" onClick={()=>setSh({t:'ct'})}>📇 استيراد من جهات الاتصال</button></div>
+   {shown.map(c=>{const t=tot(c),s=cst(c);return <div key={c.id} className="card p-3" style={{borderRight:'5px solid '+COL[s]}} onClick={()=>setSh({t:'c',id:c.id})}><div className="flex justify-between"><b>{c.name}</b><Chip s={s}/></div><div className="flex justify-between text-sm mt-1"><span className="px-2 rounded-full text-xs" style={{background:'var(--bg)'}}>📄 {c.contracts.length} عقد</span><span>باقي <b className="mono text-red-700">{fmt(t.r)}</b></span></div><div className="h-1.5 rounded bg-slate-200 mt-2"><div className="h-1.5 rounded" style={{width:Math.min(100,t.t?t.p/t.t*100:0)+'%',background:COL[s]}}/></div><div className="flex gap-2 mt-2 text-sm" onClick={e=>e.stopPropagation()}>{c.phones[0]&&<a className="px-3 py-1 rounded-lg" style={{background:'var(--bg)'}} href={'tel:'+c.phones[0].n}>📞</a>}{c.phones[0]&&<a className="px-3 py-1 rounded-lg" style={{background:'var(--bg)'}} target="_blank" href={wa(c.phones[0].n)}>💬</a>}<button className="px-3 py-1 rounded-lg" style={{background:'var(--bg)'}} onClick={()=>setSh({t:'p',id:c.id})}>💵 دفعة</button><button className="px-3 py-1 rounded-lg" style={{background:'var(--bg)'}} onClick={()=>setSh({t:'st',id:c.id})}>📄 كشف</button></div></div>})}</div>}
+  {tab==='pm'&&<PaymentsTab cl={cl} dq={dq} open={id=>setSh({t:'c',id})} mut={mut} say={say}/>}
+  {tab==='rp'&&<Reports cl={cl} dq={dq} open={id=>setSh({t:'c',id})} say={say}/>}
+  {tab==='more'&&<div className="p-3 space-y-2">
+   <button className="btn w-full" onClick={()=>dl('PESS-Backup-'+today()+'.json',JSON.stringify(toOrig(data),null,1),'application/json')}>⬇ نسخ احتياطي JSON (متوافق مع النظام القديم)</button>
+   <label className="btn w-full flex items-center justify-center" style={{background:'#2563eb'}}>⬆ استيراد نسخة JSON<input type="file" accept=".json,application/json" hidden onChange={imp}/></label>
+   <button className="btn w-full" style={{background:'#0f7a3a'}} onClick={csv}>تصدير Excel CSV</button>
+   <div className="card p-3 space-y-2"><b>بيانات الشركة</b>{[['name','الاسم'],['addr','العنوان'],['phone','الهاتف'],['email','البريد'],['note','ملاحظة']].map(([k,l])=><L key={k} t={l}><input className="inp" value={co[k]||''} onChange={e=>mut(d=>{d.company=d.company||{};d.company[k]=e.target.value},'تعديل بيانات الشركة: '+l,'co'+k)}/></L>)}
+   {[['logo','الشعار','logoEnabled'],['stamp','الختم','stampEnabled'],['sign','التوقيع','signEnabled']].map(([f,l,en])=><div key={f} className="flex items-center gap-2 text-sm flex-wrap"><b className="w-14">{l}</b>{co[f]&&<img src={co[f]} style={{height:36}}/>}<label className="underline text-blue-600">رفع<input type="file" accept="image/*" hidden onChange={e=>img(e,f)}/></label>{co[f]&&<button onClick={()=>{setCo(f,'');setCo(en,false)}}>🗑</button>}<label><input type="checkbox" checked={!!co[en]} onChange={e=>setCo(en,e.target.checked)}/> إظهار</label></div>)}
+   <label className="text-sm"><input type="checkbox" checked={!!co.qrEnabled} onChange={e=>setCo('qrEnabled',e.target.checked)}/> إظهار QR في كشف الحساب</label></div>
+   <button className="btn w-full" style={{background:'#0f7a3a'}} onClick={()=>{const m=xl('pess-full-'+today()+'.xlsx',fullSheets(cl));say(m==='xlsx'?'تم تصدير Excel ✓':'مكتبة Excel غير محمّلة — تم التصدير CSV')}}>📊 تصدير Excel كامل (عملاء · عقود · دفعات)</button>
+   <button className="btn w-full" style={{background:'#2563eb'}} onClick={()=>setSh({t:'ct'})}>📇 استيراد من جهات الاتصال</button>
+   <button className="btn w-full" style={{background:'#7c2d12'}} onClick={()=>setSh({t:'sec'})}>🛡 مركز الأمان (قفل · تشفير · استعادة · فحص)</button>
+   {sync!=='local'&&<button className="btn w-full" style={{background:'#0369a1'}} onClick={()=>doPush()}>☁ مزامنة الآن مع السيرفر</button>}
+   <button className="btn w-full" style={{background:'#0e7490'}} onClick={()=>setSh({t:'t'})}>📚 الجداول المخصصة ({(data.tables||[]).length})</button>
+   <button className="btn w-full" style={{background:'#7c3aed'}} onClick={()=>setSh({t:'s'})}>⚙ إعدادات قاعدة البيانات (حقول وقوائم)</button>
+   <button className="btn w-full" style={{background:'#b91c1c'}} onClick={()=>setExitQ(true)}>حفظ والخروج</button>
+   <div className="card p-3 text-xs space-y-1"><b>حالة التخزين</b><div>الحفظ: {st==='err'?'🔴 فشل — خذ نسخة JSON فوراً':st==='idb'?'🟡 بديل (IndexedDB فقط)':'🟢 سليم'} · التخزين الدائم: {persist}</div>{errR.current&&<div className="text-red-700">{errR.current}</div>}<button className="underline" onClick={diag}>تشخيص التخزين</button></div>
+   <div className="card p-3 text-xs max-h-48 overflow-auto"><b>سجل الحفظ</b>{slog.map((x,i)=><div key={i}>{new Date(x.t).toLocaleString('ar',{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit',second:'2-digit'})} — {x.why} · {x.kb}KB</div>)}</div>
+   <div className="card p-3 text-xs max-h-64 overflow-auto"><b>سجل التغييرات ({(data.audit||[]).length})</b>{(data.audit||[]).map((a,i)=><div key={i} className="border-b py-0.5" style={{borderColor:'var(--bd)'}}>{new Date(a.t).toLocaleString('ar',{month:'numeric',day:'numeric',hour:'2-digit',minute:'2-digit',second:'2-digit'})} — {a.a}</div>)}</div>
+   <p className="text-xs text-center" style={{color:'var(--mut)'}}>لتثبيته كتطبيق: قائمة المتصفح ⋮ ← «إضافة إلى الشاشة الرئيسية»</p></div>}
+  {(tab==='home'||tab==='cl'||tab==='pm')&&<button className="fixed z-30 text-white rounded-2xl shadow-lg flex items-center gap-2 px-5 font-bold" style={{left:16,bottom:'calc(84px + env(safe-area-inset-bottom,0px))',height:56,background:'#0f7a3a'}} onClick={()=>setSh({t:'p'})}><span className="text-2xl leading-none">＋</span>{tab==='pm'&&'دفعة'}</button>}
+  {(tab==='cl')&&<button className="fixed z-30 text-white rounded-full shadow-lg px-4" style={{left:84,bottom:'calc(92px + env(safe-area-inset-bottom,0px))',height:40,background:'#002244'}} onClick={()=>setSh({t:'n'})}>عميل جديد</button>}
+  <nav className="nav">{tabs.map(([k,n,l])=><button key={k} className={tab===k?'on':''} onClick={()=>{try{navigator.vibrate&&navigator.vibrate(8)}catch(e){}setTab(k)}}><span className="pill"><Ic n={n}/></span><span>{l}</span></button>)}</nav>
+  {sh?.t==='c'&&cl.find(x=>x.id===sh.id)&&<ClientEditor key={sh.id} base={cl.find(x=>x.id===sh.id)} mut={mut} close={closeSh} say={say} co={co} sch={data.schema||{}} snap={()=>takeSnap('قبل حفظ تعديلات عميل')} onStmt={()=>setSh({t:'st',id:sh.id})}/>}
+  {sh?.t==='ct'&&<ContactsSheet cl={cl} mut={mut} close={closeSh} say={say}/>}
+  {sh?.t==='sec'&&<SecuritySheet data={data} close={closeSh} say={say} open={id=>setSh({t:'c',id})} takeSnap={takeSnap} restore={restoreSnap}/>}
+  {sh?.t==='st'&&cl.find(x=>x.id===sh.id)&&<StatementSheet c={cl.find(x=>x.id===sh.id)} co={co} close={closeSh} mut={mut} say={say}/>}
+  {sh?.t==='t'&&<TablesSheet data={data} mut={mut} close={closeSh}/>}
+  {sh?.t==='s'&&<SchemaSheet data={data} mut={mut} close={closeSh}/>}
+  {sh?.t==='p'&&<PaySheet data={data} cid={sh.id} mut={mut} close={closeSh} say={say}/>}
+  {sh?.t==='n'&&<NewClient data={data} mut={mut} close={closeSh} say={say} open={id=>setSh({t:'c',id})}/>}
+  {exitQ&&<div className="sheet" style={{alignItems:'center',zIndex:70}}><div className="card" style={{borderRadius:20,margin:20,textAlign:'center'}}><div className="text-3xl">💾</div><b className="block text-lg my-2">هل تريد حفظ البيانات والخروج؟</b><div className="text-xs mb-3" style={{color:'var(--mut)'}}>آخر حفظ تلقائي: {new Date(saved).toLocaleTimeString('ar')}</div><div className="flex gap-2"><button className="btn flex-1" style={{background:'#0f7a3a'}} onClick={doExit}>حفظ والخروج</button><button className="btn flex-1" style={{background:'#64748b'}} onClick={()=>setExitQ(false)}>إلغاء</button></div></div></div>}
+  {bye&&<div className="sheet" style={{alignItems:'center',zIndex:80,background:'#002244'}}><div style={{width:'100%',textAlign:'center',color:'#fff',padding:20}}><div className="text-5xl">✅</div><b className="block text-xl my-3">تم حفظ كل البيانات في ذاكرة الهاتف</b><p className="text-sm mb-4">يمكنك الآن إغلاق التطبيق بأمان</p><button className="btn" style={{background:'#2563eb'}} onClick={()=>{window.__bye=false;try{history.pushState({g:1},'')}catch(e){}setBye(false)}}>العودة للتطبيق</button></div></div>}
+  {toast&&<div className="fixed z-[60] left-1/2 -translate-x-1/2 text-white px-4 py-2 rounded-xl" style={{bottom:110,background:'#0f7a3a'}}>{toast}</div>}
+ </div>}
+ReactDOM.createRoot(document.getElementById('root')).render(<EB><App/></EB>);
+</script></body></html>
